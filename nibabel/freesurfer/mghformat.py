@@ -288,6 +288,15 @@ class MGHHeader(LabeledWrapStruct):
                                       ''.format(zooms[3]))
             hdr['tr'] = zooms[3]
 
+    def get_norm_zooms(self, raise_unknown=False):
+        ''' Get zooms in mm/s units '''
+        zooms = self.get_zooms()
+
+        if len(zooms) == 4:
+            zooms = zooms[:3] + (zooms[3] / 1000,)
+
+        return zooms
+
     def get_data_shape(self):
         ''' Get shape of data
         '''
