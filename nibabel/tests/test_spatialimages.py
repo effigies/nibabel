@@ -215,7 +215,7 @@ class TestSpatialImage(TestCase):
         # Pass it back in
         img = img_klass(arr, aff, ihdr)
         # Check modifying header outside does not modify image
-        ihdr.set_zooms((4, 5, 6))
+        ihdr.set_zooms((4, 5, 6), units='norm')
         assert img.header != ihdr
 
     def test_float_affine(self):
@@ -545,8 +545,8 @@ class TestSpatialImage(TestCase):
         arr = np.arange(120, dtype=np.int16).reshape((2, 3, 4, 5))
         aff = np.eye(4)
         img = img_klass(arr, aff)
-        img.header.set_norm_zooms((2, 2, 2, 2.5))
-        assert_array_equal(img.header.get_zooms(units='canonical'), (2, 2, 2, 2.5))
+        img.header.set_zooms((2, 2, 2, 2.5), units='norm')
+        assert_array_equal(img.header.get_zooms(units='norm'), (2, 2, 2, 2.5))
 
     def test_zooms_edge_cases(self):
         ''' Override for classes where *_norm_zooms != *_zooms '''
@@ -554,12 +554,12 @@ class TestSpatialImage(TestCase):
         arr = np.arange(120, dtype=np.int16).reshape((2, 3, 4, 5))
         aff = np.eye(4)
         img = img_klass(arr, aff)
-        img.header.set_zooms((2, 2, 2, 2.5))
+        img.header.set_zooms((2, 2, 2, 2.5), units='raw')
         assert_array_equal(img.header.get_zooms(units='raw'), (2, 2, 2, 2.5))
-        assert_array_equal(img.header.get_zooms(units='canonical'), (2, 2, 2, 2.5))
-        img.header.set_norm_zooms((2, 2, 2, 2.5))
+        assert_array_equal(img.header.get_zooms(units='norm'), (2, 2, 2, 2.5))
+        img.header.set_zooms((2, 2, 2, 2.5), units='norm')
         assert_array_equal(img.header.get_zooms(units='raw'), (2, 2, 2, 2.5))
-        assert_array_equal(img.header.get_zooms(units='canonical'), (2, 2, 2, 2.5))
+        assert_array_equal(img.header.get_zooms(units='norm'), (2, 2, 2, 2.5))
 
     def test_api_deprecations(self):
 
