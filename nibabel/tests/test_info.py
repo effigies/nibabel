@@ -43,5 +43,4 @@ def test_cmp_pkg_version():
     assert_raises(ValueError, cmp_pkg_version, 'foo.2')
     assert_raises(ValueError, cmp_pkg_version, 'foo.2', '1.0')
     assert_raises(ValueError, cmp_pkg_version, '1.0', 'foo.2')
-    assert_raises(ValueError, cmp_pkg_version, '1')
     assert_raises(ValueError, cmp_pkg_version, 'foo')

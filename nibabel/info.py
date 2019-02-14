@@ -5,14 +5,12 @@ in setup.py, the nibabel top-level docstring, and for building the docs.  In
 setup.py in particular, we exec this file, so it cannot import nibabel.
 """
 
-import re
-from distutils.version import StrictVersion
-
-# nibabel version information.  An empty _version_extra corresponds to a
-# full release.  *Any string* in `_version_extra` labels the version as
-# pre-release.  So, if `_version_extra` is not empty, the version is taken to
-# be earlier than the same version where `_version_extra` is empty (see
-# `cmp_pkg_version` below).
+# nibabel version information.
+# We use a subset of PEP 440 (https://www.python.org/dev/peps/pep-0440) conventions, and
+# rely on PEP 440 rules to compare versions (see `cmp_pkg_version` below).
+# An empty _version_extra corresponds to a full release.
+# We do not currently use local versions (X.Y.Z+<local>) or post releases (X.Y.Z.postN)
+# or any `_version_extra` strings that normalize to these forms.
 #
 # We usually use `dev` as `_version_extra` to label this as a development
 # (pre-release) version.
@@ -27,15 +25,6 @@ __version__ = "%s.%s.%s%s" % (_version_major,
                               _version_minor,
                               _version_micro,
                               _version_extra)
-
-
-def _parse_version(version_str):
-    """ Parse version string `version_str` in our format
-    """
-    match = re.match(r'([0-9.]*\d)(.*)', version_str)
-    if match is None:
-        raise ValueError('Invalid version ' + version_str)
-    return match.groups()
 
 
 def _cmp(a, b):
@@ -74,14 +63,11 @@ def cmp_pkg_version(version_str, pkg_version_str=__version__):
     >>> cmp_pkg_version('1.2.0dev', '1.2.0')
     -1
     """
-    version, extra = _parse_version(version_str)
-    pkg_version, pkg_extra = _parse_version(pkg_version_str)
-    if version != pkg_version:
-        return _cmp(StrictVersion(version), StrictVersion(pkg_version))
-    return (0 if extra == pkg_extra
-            else 1 if extra == ''
-            else -1 if pkg_extra == ''
-            else _cmp(extra, pkg_extra))
+    from packaging.version import Version
+
+    version = Version(version_str)
+    pkg_version = Version(pkg_version_str)
+    return _cmp(version, pkg_version)
 
 
 CLASSIFIERS = ["Development Status :: 4 - Beta",
