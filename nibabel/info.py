@@ -175,6 +175,7 @@ the top of the release notes.  Click on the badge for more information.
 NUMPY_MIN_VERSION = '1.7.1'
 PYDICOM_MIN_VERSION = '0.9.9'
 SIX_MIN_VERSION = '1.3'
+PACKAGING_MIN_VERSION = '14.0'
 
 # Main setup parameters
 NAME = 'nibabel'
@@ -197,4 +198,5 @@ VERSION = __version__
 PROVIDES = ["nibabel", 'nisext']
 REQUIRES = ["numpy>=%s" % NUMPY_MIN_VERSION,
             "six>=%s" % SIX_MIN_VERSION,
+            "packaging>=%s" % PACKAGING_MIN_VERSION,
             'bz2file; python_version < "3.0"']
