@@ -450,28 +450,73 @@ class SpatialImage(DataobjImage):
         '''
         super(SpatialImage, self).__init__(dataobj, header=header, extra=extra,
                                            file_map=file_map)
-        if affine is not None:
-            # Check that affine is array-like 4,4.  Maybe this is too strict at
-            # this abstract level, but so far I think all image formats we know
-            # do need 4,4.
-            # Copy affine to isolate from environment.  Specify float type to
-            # avoid surprising integer rounding when setting values into affine
-            affine = np.array(affine, dtype=np.float64, copy=True)
-            if not affine.shape == (4, 4):
-                raise ValueError('Affine should be shape 4,4')
-        self._affine = affine
 
         # if header not specified, get data type from input array
         if header is None:
             if hasattr(dataobj, 'dtype'):
                 self._header.set_data_dtype(dataobj.dtype)
-        # make header correspond with image and affine
-        self.update_header()
-        self._data_cache = None
+
+        if affine is not None:
+            # Set through property for type coercion and shape check
+            self.affine = affine
+        else:
+            self._affine = None
+
 
     @property
     def affine(self):
-        return self._affine
+        """ A read-only view of the affine matrix.
+
+        To update the affine matrix, the affine property should be
+        set with a new matrix.
+
+        >>> import numpy as np
+        >>> from nibabel.spatialimages import SpatialImage
+        >>> affine = np.eye(4)
+        >>> img = SpatialImage(np.zeros((5, 5, 5)), affine)
+        >>> img.affine is affine
+        False
+        >>> np.array_equal(img.affine, affine)
+        True
+        >>> print(img.affine)
+        [[1. 0. 0. 0.]
+         [0. 1. 0. 0.]
+         [0. 0. 1. 0.]
+         [0. 0. 0. 1.]]
+        >>> img.affine.flags['WRITEABLE']
+        False
+
+        Affine matrices are copied when set, so later changes on the
+        source matrix have no effect on the image affine::
+
+        >>> affine[2, 2] = 2
+        >>> np.array_equal(img.affine, affine)
+        False
+        >>> img.affine = affine
+        >>> np.array_equal(img.affine, affine)
+        True
+        >>> img.affine.flags['WRITEABLE']
+        False
+        """
+        if self._affine is None:
+            return None
+        # Return a view to prevent writing
+        return self._affine.view()
+
+    @affine.setter
+    def affine(self, affine):
+        # Copy affine to isolate from environment.  Specify float type to
+        # avoid surprising integer rounding when setting values into affine
+        affine = np.array(affine, dtype=np.float64, copy=True)
+        # Check that affine is array-like 4,4.  Maybe this is too strict at
+        # this abstract level, but so far I think all image formats we know
+        # do need 4,4.
+        if not affine.shape == (4, 4):
+            raise ValueError('Affine should be shape 4,4')
+        affine.flags['WRITEABLE'] = False
+        self._affine = affine
+        # make header correspond with image and affine
+        self.update_header()
 
     def update_header(self):
         ''' Harmonize header with image data and affine
