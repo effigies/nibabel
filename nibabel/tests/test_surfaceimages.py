@@ -57,7 +57,7 @@ class H5Geometry(TriangularMesh):
             for name, coords in h5f['coordinates'].items():
                 meshes[name] = (coords, triangles)
         return klass(meshes)
-    
+
     def to_filename(self, pathlike):
         topology = None
         coordinates = {}
@@ -218,3 +218,36 @@ class FreeSurferSubject(GeometryCollection):
         subject = super().__init__(structures)
         subject._subject_dir = subject_dir
         return subject
+
+
+class GiftiSurface(TriangularMesh):
+    # valid_exts = ('.surf.gii',)  # coord? topo?
+
+    @classmethod
+    def from_filename(klass, pathlike):
+        from nibabel.gifti import GiftiImage
+        path = Path(pathlike)
+        image = GiftiImage.from_filename(path)
+        coord_meta = image.get_arrays_from_intent(1008)[0].metadata  # pointset
+        mesh_name_type = ('MidThickness', 'GrayWhite', 'Pial', 'Inflated')
+        mesh_name_candidate = []
+        for label in ('GeometricType', 'AnatomicalStructureSecondary'):
+            name = coord_meta.get(label, False)
+            if name:
+                mesh_name_candidate.append(name)
+        mesh_name = (set(mesh_name_type) & set(mesh_name_candidate))
+        mesh_name = mesh_name.pop() if len(mesh_name) == 1 else 'unknown'
+        meshes = {mesh_name: image.agg_data(('pointset', 'triangle'))}
+        return klass(meshes)
+
+    def get_coords(self, name=None):
+        if name is None:
+            name = next(iter(self._meshes))
+        pointset, _ = self._meshes[name]
+        return pointset
+
+    def get_triangles(self, name=None):
+        if name is None:
+            name = next(iter(self._meshes))
+        _, triangles = self._meshes[name]
+        return triangles
