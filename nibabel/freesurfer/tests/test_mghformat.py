@@ -387,6 +387,7 @@ class TestMGHImage(tsi.TestSpatialImage, tsi.MmapImageMixin):
     """
     image_class = MGHImage
     can_save = True
+    supported_np_types = {np.dtype("u1"), np.dtype(">i2"), np.dtype(">i4"), np.dtype(">f4")}
 
     def check_dtypes(self, expected, actual):
         # Some images will want dtypes to be equal including endianness,

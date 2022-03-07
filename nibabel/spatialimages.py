@@ -421,7 +421,7 @@ class SpatialImage(DataobjImage):
     ImageSlicer = SpatialFirstSlicer
 
     def __init__(self, dataobj, affine, header=None,
-                 extra=None, file_map=None):
+                 extra=None, file_map=None, dtype=None):
         """ Initialize image
 
         The image is a combination of (array-like, affine matrix, header), with
@@ -461,7 +461,9 @@ class SpatialImage(DataobjImage):
         self._affine = affine
 
         # if header not specified, get data type from input array
-        if header is None:
+        if dtype is not None:
+            self._header.set_data_dtype(dtype)
+        elif header is None:
             if hasattr(dataobj, 'dtype'):
                 self._header.set_data_dtype(dataobj.dtype)
         # make header correspond with image and affine

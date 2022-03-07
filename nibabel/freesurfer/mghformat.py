@@ -518,12 +518,12 @@ class MGHImage(SpatialImage, SerializableImage):
     ImageArrayProxy = ArrayProxy
 
     def __init__(self, dataobj, affine, header=None,
-                 extra=None, file_map=None):
+                 extra=None, file_map=None, dtype=None):
         shape = dataobj.shape
         if len(shape) < 3:
             dataobj = reshape_dataobj(dataobj, shape + (1,) * (3 - len(shape)))
         super(MGHImage, self).__init__(dataobj, affine, header=header,
-                                       extra=extra, file_map=file_map)
+                                       extra=extra, file_map=file_map, dtype=dtype)
 
     @classmethod
     def filespec_to_file_map(klass, filespec):
@@ -577,7 +577,7 @@ class MGHImage(SpatialImage, SerializableImage):
         img = klass(data, affine, header, file_map=file_map)
         return img
 
-    def to_file_map(self, file_map=None):
+    def to_file_map(self, file_map=None, dtype=None):
         """ Write image to `file_map` or contained ``self.file_map``
 
         Parameters
@@ -591,12 +591,22 @@ class MGHImage(SpatialImage, SerializableImage):
         data = np.asanyarray(self.dataobj)
         self.update_header()
         hdr = self.header
+
+        # Override dtype conditionally
+        data_dtype = hdr.get_data_dtype()
+        if dtype is not None:
+            hdr.set_data_dtype(dtype)
+        out_dtype = hdr.get_data_dtype()
+
         with file_map['image'].get_prepare_fileobj('wb') as mghf:
             hdr.writehdr_to(mghf)
             self._write_data(mghf, data, hdr)
             hdr.writeftr_to(mghf)
         self._header = hdr
         self.file_map = file_map
+
+        # Restore dtype
+        self.set_data_dtype(data_dtype)
 
     def _write_data(self, mghfile, data, header):
         """ Utility routine to write image

@@ -529,6 +529,38 @@ class TestSpatialImage(TestCase):
                             assert (sliced_data == img.get_data()[sliceobj]).all()
                         assert (sliced_data == img.get_fdata()[sliceobj]).all()
 
+    def test_dtype_init_arg(self):
+        # data_dtype can be set by argument in absence of header
+        img_klass = self.image_class
+        arr = np.arange(24, dtype=np.int16).reshape((2, 3, 4))
+        aff = np.eye(4)
+        for dtype in self.supported_np_types:
+            img = img_klass(arr, aff, dtype=dtype)
+            assert img.get_data_dtype() == dtype
+        # It can also override the header dtype
+        hdr = img.header
+        for dtype in self.supported_np_types:
+            img = img_klass(arr, aff, hdr, dtype=dtype)
+            assert img.get_data_dtype() == dtype
+
+    def test_dtype_to_filename_arg(self):
+        # data_dtype can be set by argument in absence of header
+        img_klass = self.image_class
+        if not img_klass.rw:
+            return
+        arr = np.arange(24, dtype=np.int16).reshape((2, 3, 4))
+        aff = np.eye(4)
+        img = img_klass(arr, aff)
+        fname = 'test' + img_klass.files_types[0][1]
+        orig_dtype = img.get_data_dtype()
+        with InTemporaryDirectory():
+            for dtype in self.supported_np_types:
+                img.to_filename(fname, dtype=dtype)
+                new_img = img_klass.from_filename(fname)
+                assert new_img.get_data_dtype() == dtype
+                # data_type is reset after write
+                assert img.get_data_dtype() == orig_dtype
+
 
 class MmapImageMixin(object):
     """ Mixin for testing images that may return memory maps """

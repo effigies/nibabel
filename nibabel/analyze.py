@@ -916,13 +916,10 @@ class AnalyzeImage(SpatialImage):
     def __init__(self, dataobj, affine, header=None,
                  extra=None, file_map=None, dtype=None):
         super(AnalyzeImage, self).__init__(
-            dataobj, affine, header, extra, file_map)
+            dataobj, affine, header, extra, file_map, dtype=dtype)
         # Reset consumable values
         self._header.set_data_offset(0)
         self._header.set_slope_inter(None, None)
-
-        if dtype is not None:
-            self._header.set_data_dtype(dtype)
     __init__.__doc__ = SpatialImage.__init__.__doc__
 
     def get_data_dtype(self):
