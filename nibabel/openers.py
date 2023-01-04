@@ -8,11 +8,14 @@
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
 """Context manager openers for various fileobject types
 """
+from __future__ import annotations
 
 import gzip
+import io
 import warnings
 from bz2 import BZ2File
 from os.path import splitext
+from typing import Callable
 
 from packaging.version import Version
 
@@ -83,7 +86,10 @@ def _zstd_open(filename, mode='r', *, level_or_option=None, zstd_dict=None):
     return pyzstd.ZstdFile(filename, mode, level_or_option=level_or_option, zstd_dict=zstd_dict)
 
 
-class Opener:
+OpenSpec = tuple[Callable, tuple[str, ...]]
+
+
+class Opener(io.BufferedIOBase):
     r"""Class to accept, maybe open, and context-manage file-likes / filenames
 
     Provides context manager to close files that the constructor opened for
@@ -106,7 +112,7 @@ class Opener:
     gz_def = (_gzip_open, ('mode', 'compresslevel', 'mtime', 'keep_open'))
     bz2_def = (BZ2File, ('mode', 'buffering', 'compresslevel'))
     zstd_def = (_zstd_open, ('mode', 'level_or_option', 'zstd_dict'))
-    compress_ext_map = {
+    compress_ext_map: dict[str | None, OpenSpec] = {
         '.gz': gz_def,
         '.bz2': bz2_def,
         '.zst': zstd_def,
@@ -194,6 +200,9 @@ class Opener:
     def fileno(self):
         return self.fobj.fileno()
 
+    def flush(self):
+        return self.fobj.flush()
+
     def read(self, *args, **kwargs):
         return self.fobj.read(*args, **kwargs)
 
@@ -206,11 +215,14 @@ class Opener:
     def seek(self, *args, **kwargs):
         return self.fobj.seek(*args, **kwargs)
 
-    def tell(self, *args, **kwargs):
-        return self.fobj.tell(*args, **kwargs)
+    def seekable(self):
+        return self.fobj.seekable()
 
-    def close(self, *args, **kwargs):
-        return self.fobj.close(*args, **kwargs)
+    def tell(self):
+        return self.fobj.tell()
+
+    def close(self):
+        return self.fobj.close()
 
     def __iter__(self):
         return iter(self.fobj)
