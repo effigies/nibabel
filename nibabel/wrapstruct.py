@@ -111,6 +111,8 @@ The same for logging::
 """
 from __future__ import annotations
 
+import typing as ty
+
 import numpy as np
 
 from . import imageglobals as imageglobals
@@ -395,7 +397,7 @@ class WrapStruct:
         return np.zeros((), dtype=dt)
 
     @property
-    def structarr(self):
+    def structarr(self) -> np.ndarray:
         """Structured data, with data fields
 
         Examples
@@ -409,12 +411,12 @@ class WrapStruct:
         """
         return self._structarr
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Return string representation for printing"""
         summary = f"{self.__class__} object, endian='{self.endianness}'"
         return '\n'.join([summary, pretty_mapping(self)])
 
-    def as_byteswapped(self, endianness=None):
+    def as_byteswapped(self, endianness: str | None = None) -> WrapStruct:
         """return new byteswapped object with given ``endianness``
 
         Guaranteed to make a copy even if endianness is the same as
@@ -476,7 +478,7 @@ class WrapStruct:
         return self.__class__(wstr_data.tobytes(), endianness, check=False)
 
     @classmethod
-    def _get_checks(klass):
+    def _get_checks(klass) -> tuple[ty.Callable, ...]:
         """Return sequence of check functions for this class"""
         return ()
 

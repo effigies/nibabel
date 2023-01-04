@@ -12,10 +12,10 @@ from __future__ import annotations
 import gzip
 import sys
 import warnings
-from collections import OrderedDict
 from functools import reduce
 from operator import mul
 from os.path import exists, splitext
+from typing import Mapping, Type
 
 import numpy as np
 
@@ -68,7 +68,7 @@ class Recoder:
     >>> recodes.code[2]
     2
     >>> # Or maybe you have a code, a label and some aliases
-    >>> codes=((1,'label1','one', 'first'),(2,'label2','two'))
+    >>> codes=((1,'label1','one', 'first'), (2,'label2','two'))
     >>> # you might want to get back the code or the label
     >>> recodes = Recoder(codes, fields=('code','label'))
     >>> recodes.code['first']
@@ -83,7 +83,7 @@ class Recoder:
     2
     """
 
-    def __init__(self, codes, fields=('code',), map_maker=OrderedDict):
+    def __init__(self, codes, fields=('code',), map_maker: Type[Mapping] = dict):
         """Create recoder object
 
         ``codes`` give a sequence of code, alias sequences
