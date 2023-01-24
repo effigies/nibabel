@@ -177,7 +177,7 @@ class GiftiImageParser(XmlParser):
         # Collecting char buffer fragments
         self._char_blocks = None
 
-    def StartElementHandler(self, name, attrs):
+    def StartElementHandler(self, name: str, attrs: dict[str, str]) -> None:
         self.flush_chardata()
         if self.verbose > 0:
             print('Start element:\n\t', repr(name), attrs)
@@ -284,7 +284,7 @@ class GiftiImageParser(XmlParser):
         elif name == 'Data':
             self.write_to = 'Data'
 
-    def EndElementHandler(self, name):
+    def EndElementHandler(self, name: str) -> None:
         self.flush_chardata()
         if self.verbose > 0:
             print('End element:\n\t', repr(name))
@@ -341,7 +341,7 @@ class GiftiImageParser(XmlParser):
             self.label = None
             self.write_to = None
 
-    def CharacterDataHandler(self, data):
+    def CharacterDataHandler(self, data: str) -> None:
         """Collect character data chunks pending collation
 
         The parser breaks the data up into chunks of size depending on the

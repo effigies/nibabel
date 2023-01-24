@@ -9,26 +9,31 @@
 """
 Thin layer around xml.etree.ElementTree, to abstract nibabel xml support.
 """
+from __future__ import annotations
 
-from io import BytesIO
+import io
+import typing as ty
 from xml.etree.ElementTree import Element, SubElement, tostring  # noqa
-from xml.parsers.expat import ParserCreate
+from xml.parsers.expat import ParserCreate, XMLParserType
 
 from .filebasedimages import FileBasedHeader
+
+if ty.TYPE_CHECKING:  # pragma: no cover
+    from _typeshed import SupportsRead
 
 
 class XmlSerializable:
     """Basic interface for serializing an object to xml"""
 
-    def _to_xml_element(self):
+    def _to_xml_element(self) -> Element | None:
         """Output should be a xml.etree.ElementTree.Element"""
-        raise NotImplementedError()
+        raise NotImplementedError  # pragma: no cover
 
-    def to_xml(self, enc='utf-8'):
+    def to_xml(self, enc: str = 'utf-8') -> bytes:
         """Output should be an xml string with the given encoding.
         (default: utf-8)"""
         ele = self._to_xml_element()
-        return '' if ele is None else tostring(ele, enc)
+        return b'' if ele is None else tostring(ele, enc)
 
 
 class XmlBasedHeader(FileBasedHeader, XmlSerializable):
@@ -46,7 +51,12 @@ class XmlParser:
 
     HANDLER_NAMES = ['StartElementHandler', 'EndElementHandler', 'CharacterDataHandler']
 
-    def __init__(self, encoding='utf-8', buffer_size=35000000, verbose=0):
+    def __init__(
+        self,
+        encoding: str = 'utf-8',
+        buffer_size: int | None = 35000000,
+        verbose: int = 0,
+    ):
         """
         Parameters
         ----------
@@ -65,7 +75,7 @@ class XmlParser:
         self.verbose = verbose
         self.fname = None  # set on calls to parse
 
-    def _create_parser(self):
+    def _create_parser(self) -> XMLParserType:
         """Internal function that allows subclasses to mess
         with the underlying parser, if desired."""
 
@@ -75,7 +85,12 @@ class XmlParser:
             parser.buffer_size = self.buffer_size
         return parser
 
-    def parse(self, string=None, fname=None, fptr=None):
+    def parse(
+        self,
+        string: bytes | None = None,
+        fname: str | None = None,
+        fptr: SupportsRead[bytes] | None = None,
+    ) -> None:
         """
         Parameters
         ----------
@@ -91,10 +106,13 @@ class XmlParser:
         if int(string is not None) + int(fptr is not None) + int(fname is not None) != 1:
             raise ValueError('Exactly one of fptr, fname, string must be specified.')
 
-        if string is not None:
-            fptr = BytesIO(string)
-        elif fname is not None:
-            fptr = open(fname)
+        if fname is not None:
+            fptr = open(fname, 'rb')
+        elif string is not None:
+            fptr = io.BytesIO(string)
+        else:
+            # For type narrowing
+            assert fptr is not None
 
         # store the name of the xml file in case it is needed during parsing
         self.fname = getattr(fptr, 'name', None)
@@ -103,11 +121,11 @@ class XmlParser:
             setattr(parser, name, getattr(self, name))
         parser.ParseFile(fptr)
 
-    def StartElementHandler(self, name, attrs):
-        raise NotImplementedError
+    def StartElementHandler(self, name: str, attrs: dict[str, str]) -> None:
+        raise NotImplementedError  # pragma: no cover
 
-    def EndElementHandler(self, name):
-        raise NotImplementedError
+    def EndElementHandler(self, name: str) -> None:
+        raise NotImplementedError  # pragma: no cover
 
-    def CharacterDataHandler(self, data):
-        raise NotImplementedError
+    def CharacterDataHandler(self, data: str) -> None:
+        raise NotImplementedError  # pragma: no cover
