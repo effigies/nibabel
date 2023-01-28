@@ -76,6 +76,10 @@ class ArrayLike(ty.Protocol):
     def ndim(self) -> int:
         ...  # pragma: no cover
 
+    @property
+    def dtype(self) -> np.dtype:
+        ...  # pragma: no cover
+
     # If no dtype is passed, any dtype might be returned, depending on the array-like
     @ty.overload
     def __array__(self, dtype: None = ..., /) -> np.ndarray[ty.Any, np.dtype[ty.Any]]:
