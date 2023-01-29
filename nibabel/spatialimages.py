@@ -156,6 +156,8 @@ if ty.TYPE_CHECKING:  # pragma: no cover
 
     from .fileslice import Slicers
 
+    Affine = npt.NDArray[np.number]
+
 SpatialImgT = ty.TypeVar('SpatialImgT', bound='SpatialImage')
 SpatialHdrT = ty.TypeVar('SpatialHdrT', bound='SpatialHeader')
 
@@ -277,7 +279,7 @@ class SpatialHeader(FileBasedHeader, SpatialProtocol):
             raise HeaderDataError('zooms must be positive')
         self._zooms = zooms
 
-    def get_base_affine(self) -> np.ndarray:
+    def get_base_affine(self) -> Affine:
         shape = self.get_data_shape()
         zooms = self.get_zooms()
         return shape_zoom_affine(shape, zooms, self.default_x_flip)
@@ -449,7 +451,7 @@ class SpatialFirstSlicer(ty.Generic[SpatialImgT]):
                 )
         return spatial_slices if return_spatial else canonical
 
-    def slice_affine(self, slicer: object) -> np.ndarray:
+    def slice_affine(self, slicer: object) -> Affine:
         """Retrieve affine for current image, if sliced by a given index
 
         Applies scaling if down-sampling is applied, and adjusts the intercept
@@ -491,11 +493,12 @@ class SpatialImage(DataobjImage):
     ImageSlicer: type[SpatialFirstSlicer] = SpatialFirstSlicer
 
     _header: SpatialHeader
+    _affine: Affine
 
     def __init__(
         self,
         dataobj: ArrayLike,
-        affine: np.ndarray,
+        affine: Affine | None,
         header: FileBasedHeader | ty.Mapping | None = None,
         extra: ty.Mapping | None = None,
         file_map: FileMap | None = None,
@@ -533,9 +536,9 @@ class SpatialImage(DataobjImage):
             # Copy affine to isolate from environment.  Specify float type to
             # avoid surprising integer rounding when setting values into affine
             affine = np.array(affine, dtype=np.float64, copy=True)
-            if not affine.shape == (4, 4):
+            if affine.shape != (4, 4):
                 raise ValueError('Affine should be shape 4,4')
-        self._affine = affine
+        self._affine = affine or self._header.get_best_affine()
 
         # if header not specified, get data type from input array
         if header is None:
@@ -546,7 +549,7 @@ class SpatialImage(DataobjImage):
         self._data_cache = None
 
     @property
-    def affine(self):
+    def affine(self) -> Affine:
         return self._affine
 
     def update_header(self) -> None:
@@ -570,10 +573,8 @@ class SpatialImage(DataobjImage):
         # maybe it happened
         if hdr.get_data_shape() != shape:
             hdr.set_data_shape(shape)
-        # If the affine is not None, and it is different from the main affine
+        # If the affine is different from the main affine
         # in the header, update the header
-        if self._affine is None:
-            return
         if np.allclose(self._affine, hdr.get_best_affine()):
             return
         self._affine2header()

@@ -885,10 +885,10 @@ def seek_tell(fileobj: io.IOBase, offset: int, write0: bool = False) -> None:
 
 
 def apply_read_scaling(
-    arr: np.ndarray,
+    arr: npt.NDArray[DT],
     slope: Scalar | None = None,
     inter: Scalar | None = None,
-) -> np.ndarray:
+) -> npt.NDArray[DT | np.floating]:
     """Apply scaling in `slope` and `inter` to array `arr`
 
     This is for loading the array from a file (as opposed to the reverse
@@ -929,18 +929,18 @@ def apply_read_scaling(
     # Force float / float upcasting by promoting to arrays
     slope1d, inter1d = (np.atleast_1d(v) for v in (slope, inter))
     arr = np.atleast_1d(arr)
-    if arr.dtype.kind in 'iu':
+    if issubclass(arr.dtype.type, np.integer):
         # int to float; get enough precision to avoid infs
         # Find floating point type for which scaling does not overflow,
         # starting at given type
         default = slope1d.dtype.type if slope1d.dtype.kind == 'f' else np.float64
-        ftype = int_scinter_ftype(arr.dtype, slope1d, inter1d, default)
+        ftype = int_scinter_ftype(arr.dtype.type, slope1d, inter1d, default)
         slope1d = slope1d.astype(ftype)
         inter1d = inter1d.astype(ftype)
-    if slope != 1.0:
-        arr = arr * slope
-    if inter != 0.0:
-        arr = arr + inter
+    if slope1d != 1.0:
+        arr = arr * slope1d
+    if inter1d != 0.0:
+        arr = arr + inter1d
     return arr.reshape(shape)
 
 
