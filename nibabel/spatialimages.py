@@ -154,6 +154,8 @@ except ImportError:  # PY38
 if ty.TYPE_CHECKING:  # pragma: no cover
     import numpy.typing as npt
 
+    from .fileslice import Slicers
+
 SpatialImgT = ty.TypeVar('SpatialImgT', bound='SpatialImage')
 SpatialHdrT = ty.TypeVar('SpatialHdrT', bound='SpatialHeader')
 
@@ -396,11 +398,27 @@ class SpatialFirstSlicer(ty.Generic[SpatialImgT]):
         affine = self.slice_affine(slicer)
         return self.img.__class__(dataobj.copy(), affine, self.img.header)
 
+    @ty.overload
+    def check_slicing(
+        self,
+        slicer: object,
+        return_spatial: ty.Literal[True],
+    ) -> tuple[slice, slice, slice]:
+        ...  # pragma: no cover
+
+    @ty.overload
     def check_slicing(
         self,
         slicer: object,
         return_spatial: bool = False,
-    ) -> tuple[slice | int | None, ...]:
+    ) -> Slicers:
+        ...  # pragma: no cover
+
+    def check_slicing(
+        self,
+        slicer: object,
+        return_spatial: bool = False,
+    ) -> Slicers:
         """Canonicalize slicers and check for scalar indices in spatial dims
 
         Parameters
@@ -458,14 +476,12 @@ class SpatialFirstSlicer(ty.Generic[SpatialImgT]):
         transform = np.eye(4, dtype=int)
 
         for i, subslicer in enumerate(slicer):
-            if isinstance(subslicer, slice):
-                if subslicer.step == 0:
-                    raise ValueError('slice step cannot be 0')
-                transform[i, i] = subslicer.step if subslicer.step is not None else 1
-                transform[i, 3] = subslicer.start or 0
-            # If slicer is None, nothing to do
+            if subslicer.step == 0:
+                raise ValueError('slice step cannot be 0')
+            transform[i, i] = subslicer.step or 1
+            transform[i, 3] = subslicer.start or 0
 
-        return self.img.affine.dot(transform)
+        return self.img.affine @ transform
 
 
 class SpatialImage(DataobjImage):
