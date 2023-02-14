@@ -155,6 +155,7 @@ if ty.TYPE_CHECKING:  # pragma: no cover
     import numpy.typing as npt
 
     from .fileslice import Slicers
+    from .volumeutils import Affine, Scalar
 
 SpatialImgT = ty.TypeVar('SpatialImgT', bound='SpatialImage')
 SpatialHdrT = ty.TypeVar('SpatialHdrT', bound='SpatialHeader')
@@ -277,7 +278,7 @@ class SpatialHeader(FileBasedHeader, SpatialProtocol):
             raise HeaderDataError('zooms must be positive')
         self._zooms = zooms
 
-    def get_base_affine(self) -> np.ndarray:
+    def get_base_affine(self) -> Affine:
         shape = self.get_data_shape()
         zooms = self.get_zooms()
         return shape_zoom_affine(shape, zooms, self.default_x_flip)
@@ -443,7 +444,7 @@ class SpatialFirstSlicer(ty.Generic[SpatialImgT]):
                 )
         return spatial_slices if return_spatial else canonical
 
-    def slice_affine(self, slicer: object) -> np.ndarray:
+    def slice_affine(self, slicer: object) -> Affine:
         """Retrieve affine for current image, if sliced by a given index
 
         Applies scaling if down-sampling is applied, and adjusts the intercept
@@ -489,7 +490,7 @@ class SpatialImage(DataobjImage):
     def __init__(
         self,
         dataobj: ArrayLike,
-        affine: np.ndarray,
+        affine: Affine | Sequence[Sequence[Scalar]],
         header: FileBasedHeader | ty.Mapping | None = None,
         extra: ty.Mapping | None = None,
         file_map: FileMap | None = None,

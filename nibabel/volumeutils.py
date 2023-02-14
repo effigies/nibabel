@@ -32,6 +32,7 @@ if ty.TYPE_CHECKING:  # pragma: no cover
 
     HAVE_ZSTD = True
 
+    Affine = npt.NDArray[np.float64]
     Scalar = np.number | float
 
     K = ty.TypeVar('K')
@@ -1316,10 +1317,10 @@ def finite_range(
 
 
 def shape_zoom_affine(
-    shape: ty.Sequence[int] | np.ndarray,
-    zooms: ty.Sequence[float] | np.ndarray,
+    shape: ty.Sequence[int] | npt.NDArray[np.integer],
+    zooms: ty.Sequence[float] | npt.NDArray[np.floating],
     x_flip: bool = True,
-) -> np.ndarray:
+) -> Affine:
     """Get affine implied by given shape and zooms
 
     We get the translations from the center of the image (implied by
@@ -1365,10 +1366,10 @@ def shape_zoom_affine(
         shape = shape[:3]
         zooms = zooms[:3]
     else:
-        full_shape = np.ones((3,))
+        full_shape = np.ones((3,), dtype=int)
         full_zooms = np.ones((3,))
-        full_shape[:ndims] = shape[:]
-        full_zooms[:ndims] = zooms[:]
+        full_shape[:ndims] = shape
+        full_zooms[:ndims] = zooms
         shape = full_shape
         zooms = full_zooms
     if x_flip:
