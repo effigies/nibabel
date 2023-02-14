@@ -285,7 +285,12 @@ class SpatialHeader(FileBasedHeader, SpatialProtocol):
 
     get_best_affine = get_base_affine
 
-    def data_to_fileobj(self, data: npt.ArrayLike, fileobj: io.IOBase, rescale: bool = True):
+    def data_to_fileobj(
+        self,
+        data: npt.ArrayLike,
+        fileobj: io.IOBase,
+        rescale: bool = True,
+    ) -> None:
         """Write array data `data` as binary to `fileobj`
 
         Parameters
