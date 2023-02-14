@@ -1,12 +1,43 @@
 """Utilities for getting array slices out of file-like objects
 """
+from __future__ import annotations
 
+import io
+import math
 import operator
+import typing as ty
+from contextlib import nullcontext
 from functools import reduce
 from mmap import mmap
-from numbers import Integral
 
 import numpy as np
+
+if ty.TYPE_CHECKING:
+    import numpy.typing as npt
+
+    Scalar = float | np.generic
+    Integral = int | np.integer
+    Shape = ty.Sequence[int]
+    Heuristic = ty.Callable[
+        [slice | Integral, int, int],
+        ty.Literal['full', 'contiguous'] | None,
+    ]
+    Slicer = slice | int | None
+    Slicers = tuple[Slicer, ...]
+    PostSlicer = slice | int | ty.Literal['dropped']
+
+    DT = ty.TypeVar('DT', bound=np.generic)
+
+    # Typing note (2023.02.14):
+    # slice.start/stop/step are annotated as Any, rather than (int | None)
+    # This hides large parts of function bodies from the type checker, so we have added
+    # explicit type expectations prior to lines like
+    #
+    # start, stop, step = slice.start, slice.stop, slice.step
+    #
+    # In the future, hopefully we can annotate with something like `slice[int]` or
+    # `slice[int, int | None, int]`
+
 
 # Threshold for memory gap above which we always skip, to save memory
 # This value came from trying various values and looking at the timing with
@@ -14,24 +45,7 @@ import numpy as np
 SKIP_THRESH = 2**8
 
 
-class _NullLock:
-    """Can be used as no-function dummy object in place of ``threading.lock``.
-
-    The ``_NullLock`` is an object which can be used in place of a
-    ``threading.Lock`` object, but doesn't actually do anything.
-
-    It is used by the ``read_segments`` function in the event that a
-    ``Lock`` is not provided by the caller.
-    """
-
-    def __enter__(self):
-        pass
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        return False
-
-
-def is_fancy(sliceobj):
+def is_fancy(sliceobj: object) -> bool:
     """Returns True if sliceobj is attempting fancy indexing
 
     Parameters
@@ -59,7 +73,11 @@ def is_fancy(sliceobj):
     return False
 
 
-def canonical_slicers(sliceobj, shape, check_inds=True):
+def canonical_slicers(
+    sliceobj: object,
+    shape: Shape,
+    check_inds: bool = True,
+) -> Slicers:
     """Return canonical version of `sliceobj` for array shape `shape`
 
     `sliceobj` is a slicer for an array ``A`` implied by `shape`.
@@ -94,7 +112,7 @@ def canonical_slicers(sliceobj, shape, check_inds=True):
         sliceobj = (sliceobj,)
     if is_fancy(sliceobj):
         raise ValueError('Cannot handle fancy indexing')
-    can_slicers = []
+    can_slicers: list[slice | None] = []
     n_dim = len(shape)
     n_real = 0
     for i, slicer in enumerate(sliceobj):
@@ -136,7 +154,7 @@ def canonical_slicers(sliceobj, shape, check_inds=True):
     return tuple(can_slicers)
 
 
-def slice2outax(ndim, sliceobj):
+def slice2outax(ndim: int, sliceobj: object) -> tuple[int | None, ...]:
     """Matching output axes for input array ndim `ndim` and slice `sliceobj`
 
     Parameters
@@ -155,9 +173,9 @@ def slice2outax(ndim, sliceobj):
     """
     sliceobj = canonical_slicers(sliceobj, [1] * ndim, check_inds=False)
     out_ax_no = 0
-    out_ax_inds = []
+    out_ax_inds: list[int | None] = []
     for obj in sliceobj:
-        if isinstance(obj, Integral):
+        if isinstance(obj, (int, np.integer)):
             out_ax_inds.append(None)
             continue
         if obj is not None:
@@ -166,7 +184,7 @@ def slice2outax(ndim, sliceobj):
     return tuple(out_ax_inds)
 
 
-def slice2len(slicer, in_len):
+def slice2len(slicer: slice, in_len: int) -> int:
     """Output length after slicing original length `in_len` with `slicer`
     Parameters
     ----------
@@ -188,18 +206,21 @@ def slice2len(slicer, in_len):
     return _full_slicer_len(full_slicer)
 
 
-def _full_slicer_len(full_slicer):
+def _full_slicer_len(full_slicer: slice) -> int:
     """Return length of slicer processed by ``fill_slicer``"""
+    start: int
+    stop: int | None
+    step: int
     start, stop, step = full_slicer.start, full_slicer.stop, full_slicer.step
     if stop is None:  # case of negative step
         stop = -1
     gap = stop - start
-    if (step > 0 and gap <= 0) or (step < 0 and gap >= 0):
+    if gap <= 0 < step or step < 0 <= gap:
         return 0
-    return int(np.ceil(gap / step))
+    return math.ceil(gap / step)
 
 
-def fill_slicer(slicer, in_len):
+def fill_slicer(slicer: slice, in_len: int) -> slice:
     """Return slice object with Nones filled out to match `in_len`
 
     Also fixes too large stop / start values according to slice() slicing
@@ -222,6 +243,9 @@ def fill_slicer(slicer, in_len):
         of ``stop`` for negative step, which is None for the case of slicing
         down through the first element
     """
+    start: int | None
+    stop: int | None
+    step: int | None
     start, stop, step = slicer.start, slicer.stop, slicer.step
     if step is None:
         step = 1
@@ -244,7 +268,7 @@ def fill_slicer(slicer, in_len):
     return slice(start, stop, step)
 
 
-def predict_shape(sliceobj, in_shape):
+def predict_shape(sliceobj: object, in_shape: Shape) -> tuple[int, ...]:
     """Predict shape of array from slicing array shape `shape` with `sliceobj`
 
     Parameters
@@ -270,18 +294,20 @@ def predict_shape(sliceobj, in_shape):
             out_shape.append(1)
             continue
         real_no += 1
-        try:  # if int - we drop a dim (no append)
-            slicer = int(slicer)
-        except TypeError:
+        # if int - we drop a dim (no append)
+        if not isinstance(slicer, int):
             out_shape.append(slice2len(slicer, in_shape[real_no - 1]))
     return tuple(out_shape)
 
 
-def _positive_slice(slicer):
+def _positive_slice(slicer: slice) -> slice:
     """Return full slice `slicer` enforcing positive step size
 
     `slicer` assumed full in the sense of :func:`fill_slicer`
     """
+    start: int
+    stop: int | None
+    step: int
     start, stop, step = slicer.start, slicer.stop, slicer.step
     if step > 0:
         return slicer
@@ -294,7 +320,12 @@ def _positive_slice(slicer):
     return slice(end, start + 1, -step)
 
 
-def threshold_heuristic(slicer, dim_len, stride, skip_thresh=SKIP_THRESH):
+def threshold_heuristic(
+    slicer: slice | Integral,
+    dim_len: int,
+    stride: int,
+    skip_thresh: int = SKIP_THRESH,
+) -> ty.Literal['full', 'contiguous'] | None:
     """Whether to force full axis read or contiguous read of stepped slice
 
     Allows :func:`fileslice` to sometimes read memory that it will throw away
@@ -333,21 +364,29 @@ def threshold_heuristic(slicer, dim_len, stride, skip_thresh=SKIP_THRESH):
     for the maximum skip distance seemed to work well, as measured by times on
     ``nibabel.benchmarks.bench_fileslice``
     """
-    if isinstance(slicer, Integral):
+    if isinstance(slicer, (int, np.integer)):
         gap_size = (dim_len - 1) * stride
         return 'full' if gap_size <= skip_thresh else None
-    step_size = abs(slicer.step) * stride
+    step_size: int = abs(slicer.step) * stride
     if step_size > skip_thresh:
         return None  # Prefer skip
     # At least contiguous - also full?
     slicer = _positive_slice(slicer)
-    start, stop = slicer.start, slicer.stop
+    start: int = slicer.start
+    stop: int = slicer.stop
     read_len = stop - start
     gap_size = (dim_len - read_len) * stride
     return 'full' if gap_size <= skip_thresh else 'contiguous'
 
 
-def optimize_slicer(slicer, dim_len, all_full, is_slowest, stride, heuristic=threshold_heuristic):
+def optimize_slicer(
+    slicer: slice | int,
+    dim_len: int,
+    all_full: bool,
+    is_slowest: bool,
+    stride: int,
+    heuristic: Heuristic = threshold_heuristic,
+) -> tuple[slice | int, slice | int | ty.Literal['dropped']]:
     """Return maybe modified slice and post-slice slicing for `slicer`
 
     Parameters
@@ -399,9 +438,7 @@ def optimize_slicer(slicer, dim_len, all_full, is_slowest, stride, heuristic=thr
     and `post_slice` as ``slice(None)``
     """
     # int or slice as input?
-    try:  # if int - we drop a dim (no append)
-        slicer = int(slicer)  # casts float to int as well
-    except TypeError:  # slice
+    if isinstance(slicer, slice):
         # Deal with full cases first
         if slicer == slice(None):
             return slicer, slicer
@@ -413,41 +450,47 @@ def optimize_slicer(slicer, dim_len, all_full, is_slowest, stride, heuristic=thr
         if slicer == slice(dim_len - 1, None, -1):
             return slice(None), slice(None, None, -1)
         # Not full, maybe continuous
-        is_int = False
     else:  # int
+        slicer = int(slicer)  # casts float to int as well
         if slicer < 0:  # make negative offsets positive
             slicer = dim_len + slicer
-        is_int = True
     if all_full:
         action = heuristic(slicer, dim_len, stride)
         # Check return values (we may be using a custom function)
         if action not in ('full', 'contiguous', None):
             raise ValueError(f'Unexpected return {action} from heuristic')
-        if is_int and action == 'contiguous':
-            raise ValueError('int index cannot be contiguous')
         # If this is the slowest changing dimension, never upgrade None or
         # contiguous beyond contiguous (we've already covered the already-full
         # case)
         if is_slowest and action == 'full':
-            action = None if is_int else 'contiguous'
+            action = None if isinstance(slicer, int) else 'contiguous'
         if action == 'full':
             return slice(None), slicer
         elif action == 'contiguous':  # Cannot be int
+            if isinstance(slicer, int):
+                raise ValueError('int index cannot be contiguous')
             # If this is already contiguous, default None behavior handles it
-            step = slicer.step
+            step: int = slicer.step
             if step not in (-1, 1):
                 if step < 0:
                     slicer = _positive_slice(slicer)
                 return (slice(slicer.start, slicer.stop, 1), slice(None, None, step))
     # We only need to be positive
-    if is_int:
+    if isinstance(slicer, int):
         return slicer, 'dropped'
     if slicer.step > 0:
         return slicer, slice(None)
     return _positive_slice(slicer), slice(None, None, -1)
 
 
-def calc_slicedefs(sliceobj, in_shape, itemsize, offset, order, heuristic=threshold_heuristic):
+def calc_slicedefs(
+    sliceobj: object,
+    in_shape: Shape,
+    itemsize: int,
+    offset: int,
+    order: ty.Literal['C', 'F'],
+    heuristic: ty.Callable = threshold_heuristic,
+) -> tuple[list[tuple[int, int]], tuple[int, ...], Slicers]:
     """Return parameters for slicing array with `sliceobj` given memory layout
 
     Calculate the best combination of skips / (read + discard) to use for
@@ -504,7 +547,7 @@ def calc_slicedefs(sliceobj, in_shape, itemsize, offset, order, heuristic=thresh
     segments = slicers2segments(read_slicers, in_shape, offset, itemsize)
     # Make post_slicers empty if it is the slicing identity operation
     if all(s == slice(None) for s in post_slicers):
-        post_slicers = []
+        post_slicers = ()
     read_shape = predict_shape(read_slicers, in_shape)
     # If reordered, order shape, post_slicers
     if order == 'C':
@@ -513,7 +556,12 @@ def calc_slicedefs(sliceobj, in_shape, itemsize, offset, order, heuristic=thresh
     return list(segments), tuple(read_shape), tuple(post_slicers)
 
 
-def optimize_read_slicers(sliceobj, in_shape, itemsize, heuristic):
+def optimize_read_slicers(
+    sliceobj: Slicers,
+    in_shape: Shape,
+    itemsize: int,
+    heuristic: Heuristic,
+) -> tuple[Slicers, tuple[slice | int, ...]]:
     """Calculates slices to read from disk, and apply after reading
 
     Parameters
@@ -547,8 +595,8 @@ def optimize_read_slicers(sliceobj, in_shape, itemsize, heuristic):
         we don't need for the slice.  Include any ``newaxis`` dimension added
         by `sliceobj`
     """
-    read_slicers = []
-    post_slicers = []
+    read_slicers: list[Slicer] = []
+    post_slicers: list[slice | int] = []
     real_no = 0
     stride = itemsize
     all_full = True
@@ -566,13 +614,18 @@ def optimize_read_slicers(sliceobj, in_shape, itemsize, heuristic):
         )
         read_slicers.append(read_slicer)
         all_full = all_full and read_slicer == slice(None)
-        if not isinstance(read_slicer, Integral):
+        if post_slicer != 'dropped':
             post_slicers.append(post_slicer)
         stride *= dim_len
     return tuple(read_slicers), tuple(post_slicers)
 
 
-def slicers2segments(read_slicers, in_shape, offset, itemsize):
+def slicers2segments(
+    read_slicers: Slicers,
+    in_shape: Shape,
+    offset: int,
+    itemsize: int,
+) -> list[tuple[int, int]]:
     """Get segments from `read_slicers` given `in_shape` and memory steps
 
     Parameters
@@ -595,7 +648,10 @@ def slicers2segments(read_slicers, in_shape, offset, itemsize):
         absolute memory offset in bytes and number of bytes to read
     """
     all_full = True
-    all_segments = [[offset, itemsize]]
+    # If all slices remain full and contiguous, there will be one segment
+    # and we will just overwrite this. Otherwise we will start making copies
+    # so we need this to be a list from the start.
+    all_segments = [(offset, itemsize)]
     stride = itemsize
     real_no = 0
     for read_slicer in read_slicers:
@@ -603,33 +659,39 @@ def slicers2segments(read_slicers, in_shape, offset, itemsize):
             continue
         dim_len = in_shape[real_no]
         real_no += 1
-        is_int = isinstance(read_slicer, Integral)
-        if not is_int:  # slicer is (now) a slice
+        is_full = is_contiguous = False
+        if isinstance(read_slicer, slice):
             # make slice full (it will always be positive)
             read_slicer = fill_slicer(read_slicer, dim_len)
-            slice_len = _full_slicer_len(read_slicer)
-        is_full = read_slicer == slice(0, dim_len, 1)
-        is_contiguous = not is_int and read_slicer.step == 1
-        if all_full and is_contiguous:  # full or contiguous
-            if read_slicer.start != 0:
-                all_segments[0][0] += stride * read_slicer.start
-            all_segments[0][1] *= slice_len
-        else:  # Previous or current stuff is not contiguous
-            if is_int:
-                for segment in all_segments:
-                    segment[0] += stride * read_slicer
+            is_full = read_slicer == slice(0, dim_len, 1)
+            is_contiguous = read_slicer.step == 1
+            if all_full and is_contiguous:  # full or contiguous
+                all_segments = [
+                    (offset + stride * read_slicer.start, length * _full_slicer_len(read_slicer))
+                    for offset, length in all_segments
+                ]
             else:  # slice object
-                segments = all_segments
-                all_segments = []
-                for i in range(read_slicer.start, read_slicer.stop, read_slicer.step):
-                    for s in segments:
-                        all_segments.append([s[0] + stride * i, s[1]])
-        all_full = all_full and is_full
+                all_segments = [
+                    (offset + stride * i, length)
+                    for i in range(read_slicer.start, read_slicer.stop, read_slicer.step)
+                    for offset, length in all_segments
+                ]
+        else:
+            all_segments = [
+                (offset + stride * read_slicer, length) for offset, length in all_segments
+            ]
+
+        all_full &= is_full
         stride *= dim_len
     return all_segments
 
 
-def read_segments(fileobj, segments, n_bytes, lock=None):
+def read_segments(
+    fileobj: io.FileIO,
+    segments: ty.Sequence[tuple[int, int]],
+    n_bytes: int,
+    lock: ty.ContextManager[None] | None = None,
+) -> bytes | mmap:
     """Read `n_bytes` byte data implied by `segments` from `fileobj`
 
     Parameters
@@ -641,14 +703,12 @@ def read_segments(fileobj, segments, n_bytes, lock=None):
         absolute file offset in bytes and number of bytes to read
     n_bytes : int
         total number of bytes that will be read
-    lock : {None, threading.Lock, lock-like} optional
+    lock : {None, threading.Lock} optional
         If provided, used to ensure that paired calls to ``seek`` and ``read``
         cannot be interrupted by another thread accessing the same ``fileobj``.
         Each thread which accesses the same file via ``read_segments`` must
         share a lock in order to ensure that the file access is thread-safe.
-        A lock does not need to be provided for single-threaded access. The
-        default value (``None``) results in a lock-like object  (a
-        ``_NullLock``) which does not do anything.
+        A lock does not need to be provided for single-threaded access.
 
     Returns
     -------
@@ -658,32 +718,42 @@ def read_segments(fileobj, segments, n_bytes, lock=None):
     """
     # Make a lock-like thing to make the code below a bit nicer
     if lock is None:
-        lock = _NullLock()
+        lock = nullcontext()
 
     if len(segments) == 0:
         if n_bytes != 0:
             raise ValueError('No segments, but non-zero n_bytes')
         return b''
+
+    buffer: bytes | mmap
     if len(segments) == 1:
         offset, length = segments[0]
         with lock:
             fileobj.seek(offset)
-            bytes = fileobj.read(length)
-        if len(bytes) != n_bytes:
+            buffer = fileobj.read(length)
+        if len(buffer) != n_bytes:
             raise ValueError('Whoops, not enough data in file')
-        return bytes
+        return buffer
     # More than one segment
-    bytes = mmap(-1, n_bytes)
+    buffer = mmap(-1, n_bytes)
     for offset, length in segments:
         with lock:
             fileobj.seek(offset)
-            bytes.write(fileobj.read(length))
-    if bytes.tell() != n_bytes:
+            buffer.write(fileobj.read(length))
+    if buffer.tell() != n_bytes:
         raise ValueError('Oh dear, n_bytes does not look right')
-    return bytes
+    return buffer
 
 
-def _simple_fileslice(fileobj, sliceobj, shape, dtype, offset=0, order='C', heuristic=None):
+def _simple_fileslice(
+    fileobj: io.FileIO,
+    sliceobj: ty.Any,
+    shape: Shape,
+    dtype: np.dtype[DT],
+    offset: int = 0,
+    order: ty.Literal['C', 'F'] = 'C',
+    heuristic: ty.Callable = threshold_heuristic,
+) -> npt.NDArray[DT]:
     """Read all data from `fileobj` into array, then slice with `sliceobj`
 
     The simplest possible thing; read all the data into the full array, then
@@ -714,14 +784,21 @@ def _simple_fileslice(fileobj, sliceobj, shape, dtype, offset=0, order='C', heur
     """
     fileobj.seek(offset)
     nbytes = reduce(operator.mul, shape) * dtype.itemsize
-    bytes = fileobj.read(nbytes)
-    new_arr = np.ndarray(shape, dtype, buffer=bytes, order=order)
+    buffer = fileobj.read(nbytes)
+    new_arr: npt.NDArray[DT] = np.ndarray(shape, dtype, buffer=buffer, order=order)
     return new_arr[sliceobj]
 
 
 def fileslice(
-    fileobj, sliceobj, shape, dtype, offset=0, order='C', heuristic=threshold_heuristic, lock=None
-):
+    fileobj: io.FileIO,
+    sliceobj: object,
+    shape: Shape,
+    dtype: np.dtype[DT],
+    offset: int = 0,
+    order: ty.Literal['C', 'F'] = 'C',
+    heuristic: ty.Callable = threshold_heuristic,
+    lock: ty.ContextManager[None] | None = None,
+) -> npt.NDArray[DT]:
     """Slice array in `fileobj` using `sliceobj` slicer and array definitions
 
     `fileobj` contains the contiguous binary data for an array ``A`` of shape,
@@ -763,9 +840,7 @@ def fileslice(
         cannot be interrupted by another thread accessing the same ``fileobj``.
         Each thread which accesses the same file via ``read_segments`` must
         share a lock in order to ensure that the file access is thread-safe.
-        A lock does not need to be provided for single-threaded access. The
-        default value (``None``) results in a lock-like object  (a
-        ``_NullLock``) which does not do anything.
+        A lock does not need to be provided for single-threaded access.
 
     Returns
     -------
@@ -779,11 +854,26 @@ def fileslice(
     segments, sliced_shape, post_slicers = calc_slicedefs(sliceobj, shape, itemsize, offset, order)
     n_bytes = reduce(operator.mul, sliced_shape, 1) * itemsize
     arr_data = read_segments(fileobj, segments, n_bytes, lock)
-    sliced = np.ndarray(sliced_shape, dtype, buffer=arr_data, order=order)
+    sliced: npt.NDArray[DT] = np.ndarray(sliced_shape, dtype, buffer=arr_data, order=order)
     return sliced[post_slicers]
 
 
-def strided_scalar(shape, scalar=0.0):
+@ty.overload
+def strided_scalar(shape: Shape, scalar: DT) -> npt.NDArray[DT]:
+    ...  # pragma: no cover
+
+
+@ty.overload
+def strided_scalar(shape: Shape, scalar: int) -> npt.NDArray[np.int64]:
+    ...  # pragma: no cover
+
+
+@ty.overload
+def strided_scalar(shape: Shape, scalar: float = ...) -> npt.NDArray[np.float64]:
+    ...  # pragma: no cover
+
+
+def strided_scalar(shape: Shape, scalar: Scalar = 0.0) -> npt.NDArray[np.generic]:
     """Return array shape `shape` where all entries point to value `scalar`
 
     Parameters
@@ -800,13 +890,11 @@ def strided_scalar(shape, scalar=0.0):
         setting all strides of `strided_arr` to 0, so the scalar is broadcast
         out to the full array `shape`. `strided_arr` is flagged as not
         `writeable`.
-
-        The array is set read-only to avoid a numpy error when broadcasting -
-        see https://github.com/numpy/numpy/issues/6491
     """
-    shape = tuple(shape)
-    scalar = np.array(scalar)
-    strides = [0] * len(shape)
-    strided_scalar = np.lib.stride_tricks.as_strided(scalar, shape, strides)
-    strided_scalar.flags.writeable = False
-    return strided_scalar
+    scalar_arr: npt.NDArray[np.generic] = np.array(scalar)
+    return np.lib.stride_tricks.as_strided(
+        scalar_arr,
+        shape,
+        [0] * len(shape),
+        writeable=False,
+    )

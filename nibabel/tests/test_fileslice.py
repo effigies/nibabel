@@ -508,17 +508,17 @@ def test_optimize_read_slicers():
 
 def test_slicers2segments():
     # Test function to construct segments from slice objects
-    assert slicers2segments((0,), (10,), 7, 4) == [[7, 4]]
-    assert slicers2segments((0, 1), (10, 6), 7, 4) == [[7 + 10 * 4, 4]]
-    assert slicers2segments((0, 1, 2), (10, 6, 4), 7, 4) == [[7 + 10 * 4 + 10 * 6 * 2 * 4, 4]]
-    assert slicers2segments((slice(None),), (10,), 7, 4) == [[7, 10 * 4]]
+    assert slicers2segments((0,), (10,), 7, 4) == [(7, 4)]
+    assert slicers2segments((0, 1), (10, 6), 7, 4) == [(7 + 10 * 4, 4)]
+    assert slicers2segments((0, 1, 2), (10, 6, 4), 7, 4) == [(7 + 10 * 4 + 10 * 6 * 2 * 4, 4)]
+    assert slicers2segments((slice(None),), (10,), 7, 4) == [(7, 10 * 4)]
     assert slicers2segments((0, slice(None)), (10, 6), 7, 4) == [
-        [7 + 10 * 4 * i, 4] for i in range(6)
+        (7 + 10 * 4 * i, 4) for i in range(6)
     ]
-    assert slicers2segments((slice(None), 0), (10, 6), 7, 4) == [[7, 10 * 4]]
-    assert slicers2segments((slice(None), slice(None)), (10, 6), 7, 4) == [[7, 10 * 6 * 4]]
+    assert slicers2segments((slice(None), 0), (10, 6), 7, 4) == [(7, 10 * 4)]
+    assert slicers2segments((slice(None), slice(None)), (10, 6), 7, 4) == [(7, 10 * 6 * 4)]
     assert slicers2segments((slice(None), slice(None), 2), (10, 6, 4), 7, 4) == [
-        [7 + 10 * 6 * 2 * 4, 10 * 6 * 4]
+        (7 + 10 * 6 * 2 * 4, 10 * 6 * 4)
     ]
 
 
@@ -526,62 +526,62 @@ def test_calc_slicedefs():
     # Check get_segments routine.  The tests aren't well organized because I
     # wrote them after the code.  We live and (fail to) learn
     segments, out_shape, new_slicing = calc_slicedefs((1,), (10,), 4, 7, 'F', _never)
-    assert segments == [[11, 4]]
+    assert segments == [(11, 4)]
     assert new_slicing == ()
     assert out_shape == ()
     assert calc_slicedefs((slice(None),), (10,), 4, 7, 'F', _never) == (
-        [[7, 40]],
+        [(7, 40)],
         (10,),
         (),
     )
     assert calc_slicedefs((slice(9),), (10,), 4, 7, 'F', _never) == (
-        [[7, 36]],
+        [(7, 36)],
         (9,),
         (),
     )
     assert calc_slicedefs((slice(1, 9),), (10,), 4, 7, 'F', _never) == (
-        [[11, 32]],
+        [(11, 32)],
         (8,),
         (),
     )
     # Two dimensions, single slice
     assert calc_slicedefs((0,), (10, 6), 4, 7, 'F', _never) == (
-        [[7, 4], [47, 4], [87, 4], [127, 4], [167, 4], [207, 4]],
+        [(7, 4), (47, 4), (87, 4), (127, 4), (167, 4), (207, 4)],
         (6,),
         (),
     )
     assert calc_slicedefs((0,), (10, 6), 4, 7, 'C', _never) == (
-        [[7, 6 * 4]],
+        [(7, 6 * 4)],
         (6,),
         (),
     )
     # Two dimensions, contiguous not full
     assert calc_slicedefs((1, slice(1, 5)), (10, 6), 4, 7, 'F', _never) == (
-        [[51, 4], [91, 4], [131, 4], [171, 4]],
+        [(51, 4), (91, 4), (131, 4), (171, 4)],
         (4,),
         (),
     )
     assert calc_slicedefs((1, slice(1, 5)), (10, 6), 4, 7, 'C', _never) == (
-        [[7 + 7 * 4, 16]],
+        [(7 + 7 * 4, 16)],
         (4,),
         (),
     )
     # With full slice first
     assert calc_slicedefs((slice(None), slice(1, 5)), (10, 6), 4, 7, 'F', _never) == (
-        [[47, 160]],
+        [(47, 160)],
         (10, 4),
         (),
     )
     # Check effect of heuristic on calc_slicedefs
     # Even integer slices can generate full when heuristic says so
     assert calc_slicedefs((1, slice(None)), (10, 6), 4, 7, 'F', _always) == (
-        [[7, 10 * 6 * 4]],
+        [(7, 10 * 6 * 4)],
         (10, 6),
         (1, slice(None)),
     )
     # Except when last
     assert calc_slicedefs((slice(None), 1), (10, 6), 4, 7, 'F', _always) == (
-        [[7 + 10 * 4, 10 * 4]],
+        [(7 + 10 * 4, 10 * 4)],
         (10,),
         (),
     )
