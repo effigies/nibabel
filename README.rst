@@ -1,6 +1,11 @@
 .. -*- rest -*-
 .. vim:syntax=rst
 
+.. links from doc/source/index.rst that are used in `long_description.inc`
+
+.. _MIT License: http://www.opensource.org/licenses/mit-license.php
+.. _appendix of the manual: https://nipy.org/nibabel/legal.html#license
+
 .. image:: doc/pics/logo.png
    :target: https://nipy.org/nibabel
    :alt: NiBabel logo
@@ -145,13 +150,10 @@ License
 =======
 
 NiBabel is free-software (beer and speech) and covered by the
-`MIT License <mit>`_. This applies to all source code, documentation,
+`MIT License`_. This applies to all source code, documentation,
 examples and snippets inside the source distribution (including this website).
-Please see the `appendix of the manual <license>`_ for the copyright statement
+Please see the `appendix of the manual`_ for the copyright statement
 and the full text of the license.
-
-.. _license: https://nipy.org/nibabel/legal.html#license
-.. _mit: https://opensource.org/license17s/MIT
 
 Citation
 ========

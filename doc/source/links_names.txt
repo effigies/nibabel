@@ -21,6 +21,7 @@
 .. _nibabel github issues: https://github.com/nipy/nibabel/issues
 .. _nibabel wiki: https://github.com/nipy/nibabel.wiki
 .. _nibabel on travis: https://travis-ci.org/nipy/nibabel
+.. _appendix of the manual: ./legal.html#license
 
 .. other related projects
 .. _nipy community: http://nipy.org
@@ -48,6 +49,7 @@
 .. _GPL: https://www.gnu.org/licenses/gpl.html
 .. _BSD: http://www.opensource.org/licenses/bsd-license.php
 .. _LGPL: https://www.gnu.org/copyleft/lesser.html
+.. _MIT License: http://www.opensource.org/licenses/mit-license.php
 .. _PDDL 1.0: http://opendatacommons.org/licenses/pddl/1.0/
 .. _CC0: http://opendefinition.org/licenses/cc-zero
 
