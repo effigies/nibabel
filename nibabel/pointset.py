@@ -262,3 +262,97 @@ class GridIndices:
 
         axes = [np.arange(s, dtype=dtype) for s in self.gridshape]
         return np.reshape(np.meshgrid(*axes, copy=False, indexing='ij'), (len(axes), -1)).T
+
+
+class SliceIndices:
+    """Class for generating indices using slice notation"""
+
+    def __init__(self, shape, dtype=None, homogeneous=False):
+        self.shape = shape
+        self.dtype = dtype or able_int_type(shape)
+        self.homogeneous = homogeneous
+
+    def __getitem__(self, index):
+        if not isinstance(index, tuple):
+            index = (index,)
+
+        if any(idx is None for idx in index):
+            raise IndexError('newaxis/None unsupported')
+
+        left, right = [], []
+        shape = list(self.shape)
+
+        # Pre-ellipsis
+        add = left.append
+        getdim = lambda: shape.pop(0)
+
+        ellipses = False
+        for subidx in index:
+            if subidx is Ellipsis:
+                if ellipses:
+                    raise IndexError
+                add = lambda x: right.insert(0, x)
+                getdim = shape.pop
+                ellipses = True
+                continue
+
+            dim = getdim()
+
+            # Standard slicing
+            if isinstance(subidx, slice):
+                start = min(subidx.start or 0, dim)
+                if start < 0:
+                    start += dim
+                stop = min(subidx.stop, dim) if subidx.stop is not None else dim
+                if stop < 0:
+                    stop += dim
+                add(np.mgrid[start : stop : subidx.step].astype(self.dtype).reshape(-1, 1))
+                continue
+
+            subidx = np.asanyarray(subidx, dtype=self.dtype)
+            if subidx.ndim == 1:
+                subidx = subidx.reshape(-1, 1)
+
+            if subidx.dtype == np.dtype('bool'):
+                # Mask array
+                add(np.c_[np.nonzero(subidx)].astype(self.dtype))
+            elif np.issubdtype(subidx.dtype, np.integer):
+                # Fancy indexing
+                add(subidx.astype(self.dtype))
+            else:
+                raise IndexError(f'Unsupported index type: {index.dtype}')
+
+            # Pop extra dimensions if multiple indexed
+            for _ in subidx.shape[1:]:
+                getdim()
+
+        # Handle ellipses and partial slicing
+        if shape:
+            left.extend(np.mgrid[:dim].astype(self.dtype).reshape(-1, 1) for dim in shape)
+
+        indices = left + right
+        cumlens = np.cumprod([1] + [arr.shape[0] for arr in indices])
+        n = cumlens[-1]
+
+        #  /------- Repeat 4x
+        #  |
+        #  |  /---- Repeat 2x, tile 2x
+        #  |  |
+        #  |  |  /- Tile 4x
+        #  X0 Y0 Z0
+        #  X0 Y0 Z1
+        #  X0 Y1 Z0
+        #  X0 Y1 Z1
+        #  X1 Y0 Z0
+        #  X1 Y0 Z1
+        #  X1 Y1 Z0
+        #  X1 Y1 Z1
+        #
+        #  For 2x2x2, cumlens=[1, 2, 4, 8], so tiles=[1, 2, 4], reps=[4, 2, 1]
+        columns = [
+            np.tile(np.repeat(arr, nreps, axis=0), (ntiles, 1))
+            for arr, ntiles, nreps in zip(indices, cumlens, n // cumlens[1:])
+        ]
+        if self.homogeneous:
+            columns.append(np.ones((n, 1), np.int32))
+        return np.hstack(columns)
