@@ -19,12 +19,7 @@ Hettinger. https://docs.python.org/howto/descriptor.html
 [2] Python data model, https://docs.python.org/reference/datamodel.html
 """
 
-from __future__ import annotations
-
-import typing as ty
-
-InstanceT = ty.TypeVar('InstanceT')
-T = ty.TypeVar('T')
+from functools import cached_property
 
 from nibabel.deprecated import deprecate_with_version
 
@@ -109,82 +104,23 @@ class ResetMixin:
         # the accessor function from the parent class will be called, simply
         # because that's how the python descriptor protocol works.
         for mname, mval in self.__class__.__dict__.items():
-            if mname in self.__dict__ and isinstance(mval, OneTimeProperty):
+            if mname in self.__dict__ and isinstance(mval, cached_property):
                 delattr(self, mname)
 
 
-class OneTimeProperty(ty.Generic[T]):
-    """A descriptor to make special properties that become normal attributes.
+OneTimeProperty = deprecate_with_version(
+    message='OneTimeProperty duplicates the functionality of functools.cached_property. '
+    'Please use cached_property instead.',
+    since='6.0',
+    until='8.0',
+)(cached_property)
 
-    This is meant to be used mostly by the auto_attr decorator in this module.
-    """
-
-    def __init__(self, func: ty.Callable[[InstanceT], T]) -> None:
-        """Create a OneTimeProperty instance.
-
-        Parameters
-        ----------
-          func : method
-
-          The method that will be called the first time to compute a value.
-          Afterwards, the method's name will be a standard attribute holding
-          the value of this computation.
-        """
-        self.getter = func
-        self.name = func.__name__
-        self.__doc__ = func.__doc__
-
-    @ty.overload
-    def __get__(
-        self, obj: None, objtype: type[InstanceT] | None = None
-    ) -> ty.Callable[[InstanceT], T]: ...
-
-    @ty.overload
-    def __get__(self, obj: InstanceT, objtype: type[InstanceT] | None = None) -> T: ...
-
-    def __get__(
-        self, obj: InstanceT | None, objtype: type[InstanceT] | None = None
-    ) -> T | ty.Callable[[InstanceT], T]:
-        """This will be called on attribute access on the class or instance."""
-        if obj is None:
-            # Being called on the class, return the original function. This
-            # way, introspection works on the class.
-            return self.getter
-
-        # Errors in the following line are errors in setting a OneTimeProperty
-        val = self.getter(obj)
-
-        obj.__dict__[self.name] = val
-        return val
-
-
-def auto_attr(func: ty.Callable[[InstanceT], T]) -> OneTimeProperty[T]:
-    """Decorator to create OneTimeProperty attributes.
-
-    Parameters
-    ----------
-      func : method
-        The method that will be called the first time to compute a value.
-        Afterwards, the method's name will be a standard attribute holding the
-        value of this computation.
-
-    Examples
-    --------
-    >>> class MagicProp:
-    ...     @auto_attr
-    ...     def a(self):
-    ...         return 99
-    ...
-    >>> x = MagicProp()
-    >>> 'a' in x.__dict__
-    False
-    >>> x.a
-    99
-    >>> 'a' in x.__dict__
-    True
-    """
-    return OneTimeProperty(func)
-
+auto_attr = deprecate_with_version(
+    message='auto_attr duplicates the functionality of functools.cached_property. '
+    'Please use cached_property instead.',
+    since='6.0',
+    until='8.0',
+)(cached_property)
 
 # -----------------------------------------------------------------------------
 # Deprecated API
