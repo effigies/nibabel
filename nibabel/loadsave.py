@@ -12,7 +12,6 @@
 from __future__ import annotations
 
 import os
-import typing as ty
 
 import numpy as np
 
@@ -26,13 +25,17 @@ from .openers import ImageOpener
 _compressed_suffixes = ('.gz', '.bz2', '.zst')
 
 
-if ty.TYPE_CHECKING:
+TYPE_CHECKING = False
+if TYPE_CHECKING:
+    from typing import ParamSpec, TypedDict, TypeVar
+
     from .filebasedimages import FileBasedImage
     from .filename_parser import FileSpec
 
-    P = ty.ParamSpec('P')
+    P = ParamSpec('P')
+    ImgT = TypeVar('ImgT', bound=FileBasedImage)
 
-    class Signature(ty.TypedDict):
+    class Signature(TypedDict):
         signature: bytes
         format_name: str
 
@@ -116,6 +119,15 @@ def load(filename: FileSpec, **kwargs) -> FileBasedImage:
         raise ImageFileError(msg)
 
     raise ImageFileError(f'Cannot work out file type of "{filename}"')
+
+
+def load_as(filename: FileSpec, api: type[ImgT], **kwargs) -> ImgT:
+    img = load(filename, **kwargs)
+    if not isinstance(img, api):
+        raise ImageFileError(
+            f'File {filename} is not of type {api.__name__}, but {type(img).__name__}'
+        )
+    return img
 
 
 @deprecate_with_version('guessed_image_type deprecated.', '3.2', '5.0')
