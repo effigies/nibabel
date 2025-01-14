@@ -1061,7 +1061,7 @@ class Cifti2MatrixIndicesMap(xml.XmlSerializable, MutableSequence):
         series_start=None,
         series_step=None,
         series_unit=None,
-        maps=[],
+        maps=(),
     ):
         self.applies_to_matrix_dimension = applies_to_matrix_dimension
         self.indices_map_to_data_type = indices_map_to_data_type
@@ -1071,8 +1071,7 @@ class Cifti2MatrixIndicesMap(xml.XmlSerializable, MutableSequence):
         self.series_step = series_step
         self.series_unit = series_unit
         self._maps = []
-        for m in maps:
-            self.append(m)
+        self.extend(maps)
 
     def __len__(self):
         return len(self._maps)

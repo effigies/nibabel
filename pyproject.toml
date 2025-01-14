@@ -139,7 +139,6 @@ select = [
     "UP",
 ]
 ignore = [
-    "B006",   # TODO: enable
     "B008",   # TODO: enable
     "B007",
     "B011",
