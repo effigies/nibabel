@@ -24,9 +24,7 @@ from ..tractogram import (
 DATA = {}
 
 
-def make_fake_streamline(
-    nb_points, data_per_point_shapes={}, data_for_streamline_shapes={}, rng=None
-):
+def make_fake_streamline(nb_points, data_per_point_shapes, data_for_streamline_shapes, rng):
     """Make a single streamline according to provided requirements."""
     if rng is None:
         rng = np.random.RandomState()
@@ -38,14 +36,14 @@ def make_fake_streamline(
         data_per_point[k] = rng.randn(*((nb_points,) + shape)).astype('f4')
 
     data_for_streamline = {}
-    for k, shape in data_for_streamline.items():
+    for k, shape in data_for_streamline_shapes.items():
         data_for_streamline[k] = rng.randn(*shape).astype('f4')
 
     return streamline, data_per_point, data_for_streamline
 
 
 def make_fake_tractogram(
-    list_nb_points, data_per_point_shapes={}, data_for_streamline_shapes={}, rng=None
+    list_nb_points, data_per_point_shapes, data_for_streamline_shapes, rng=None
 ):
     """Make multiple streamlines according to provided requirements."""
     all_streamlines = []
@@ -170,7 +168,7 @@ def setup_module():
     )
 
 
-def check_tractogram_item(tractogram_item, streamline, data_for_streamline={}, data_for_points={}):
+def check_tractogram_item(tractogram_item, streamline, data_for_streamline, data_for_points):
     assert_array_equal(tractogram_item.streamline, streamline)
 
     assert len(tractogram_item.data_for_streamline) == len(data_for_streamline)
@@ -186,7 +184,7 @@ def assert_tractogram_item_equal(t1, t2):
     check_tractogram_item(t1, t2.streamline, t2.data_for_streamline, t2.data_for_points)
 
 
-def check_tractogram(tractogram, streamlines=[], data_per_streamline={}, data_per_point={}):
+def check_tractogram(tractogram, streamlines, data_per_streamline, data_per_point):
     streamlines = list(streamlines)
     assert len(tractogram) == len(streamlines)
     assert_arrays_equal(tractogram.streamlines, streamlines)
@@ -389,7 +387,7 @@ class TestPerArraySequenceDict(unittest.TestCase):
             'fa': DATA['fa'][0].shape[1:],
         }
         _, new_data, _ = make_fake_tractogram(
-            list_nb_points, data_per_point_shapes, rng=DATA['rng']
+            list_nb_points, data_per_point_shapes, {}, rng=DATA['rng']
         )
         sdict2 = PerArraySequenceDict(np.sum(list_nb_points), new_data)
 
@@ -415,7 +413,7 @@ class TestPerArraySequenceDict(unittest.TestCase):
             'other': (7,),
         }
         _, new_data, _ = make_fake_tractogram(
-            list_nb_points, data_per_point_shapes, rng=DATA['rng']
+            list_nb_points, data_per_point_shapes, {}, rng=DATA['rng']
         )
         sdict2 = PerArraySequenceDict(np.sum(list_nb_points), new_data)
         with pytest.raises(ValueError):
@@ -427,7 +425,7 @@ class TestPerArraySequenceDict(unittest.TestCase):
             'other': DATA['fa'][0].shape[1:],
         }
         _, new_data, _ = make_fake_tractogram(
-            list_nb_points, data_per_point_shapes, rng=DATA['rng']
+            list_nb_points, data_per_point_shapes, {}, rng=DATA['rng']
         )
         sdict2 = PerArraySequenceDict(np.sum(list_nb_points), new_data)
         with pytest.raises(ValueError):
@@ -439,7 +437,7 @@ class TestPerArraySequenceDict(unittest.TestCase):
             'fa': DATA['fa'][0].shape[1:] + (3,),
         }
         _, new_data, _ = make_fake_tractogram(
-            list_nb_points, data_per_point_shapes, rng=DATA['rng']
+            list_nb_points, data_per_point_shapes, {}, rng=DATA['rng']
         )
         sdict2 = PerArraySequenceDict(np.sum(list_nb_points), new_data)
         with pytest.raises(ValueError):
@@ -492,12 +490,12 @@ class TestTractogram(unittest.TestCase):
     def test_tractogram_creation(self):
         # Create an empty tractogram.
         tractogram = Tractogram()
-        check_tractogram(tractogram)
+        check_tractogram(tractogram, [], {}, {})
         assert tractogram.affine_to_rasmm is None
 
         # Create a tractogram with only streamlines
         tractogram = Tractogram(streamlines=DATA['streamlines'])
-        check_tractogram(tractogram, DATA['streamlines'])
+        check_tractogram(tractogram, DATA['streamlines'], {}, {})
 
         # Create a tractogram with a given affine_to_rasmm.
         affine = np.diag([1, 2, 3, 1])
@@ -573,7 +571,7 @@ class TestTractogram(unittest.TestCase):
 
         # Get one TractogramItem out of two.
         tractogram_view = DATA['simple_tractogram'][::2]
-        check_tractogram(tractogram_view, DATA['streamlines'][::2])
+        check_tractogram(tractogram_view, DATA['streamlines'][::2], {}, {})
 
         # Use slicing.
         r_tractogram = DATA['tractogram'][::-1]
@@ -851,7 +849,7 @@ class TestLazyTractogram(unittest.TestCase):
         # Empty `LazyTractogram`
         tractogram = LazyTractogram()
         with pytest.warns(Warning, match='Number of streamlines will be determined manually'):
-            check_tractogram(tractogram)
+            check_tractogram(tractogram, [], {}, {})
         assert tractogram.affine_to_rasmm is None
 
         # Create tractogram with streamlines and other data
@@ -873,7 +871,7 @@ class TestLazyTractogram(unittest.TestCase):
         # Create an empty `LazyTractogram` yielding nothing.
         tractogram = LazyTractogram.from_data_func(lambda: iter([]))
         with pytest.warns(Warning, match='Number of streamlines will be determined manually'):
-            check_tractogram(tractogram)
+            check_tractogram(tractogram, [], {}, {})
 
         # Create `LazyTractogram` from a generator function yielding
         # TractogramItem.
