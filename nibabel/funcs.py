@@ -8,13 +8,31 @@
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ##
 """Processor functions for images"""
 
+from __future__ import annotations
+
+import typing as ty
+
 import numpy as np
 
-from .loadsave import load
+from .loadsave import load_as
 from .orientations import OrientationError, io_orientation
+from .spatialimages import SpatialImage
+
+if ty.TYPE_CHECKING:
+    from collections.abc import Sequence
+    from typing import Literal as L
+
+    import numpy.typing as npt
+
+    from .filename_parser import FileSpec
+    from .spatialimages import Affine, AnySpatialImgT, SpatialImgT
+
+    _OneSpatialImgT = ty.TypeVar(
+        '_OneSpatialImgT', bound=SpatialImage[Affine] | SpatialImage[None]
+    )
 
 
-def squeeze_image(img):
+def squeeze_image(img: AnySpatialImgT) -> AnySpatialImgT:
     """Return image, remove axes length 1 at end of image shape
 
     For example, an image may have shape (10,20,30,1,1).  In this case
@@ -83,7 +101,63 @@ def squeeze_image(img):
     return klass(data, img.affine, img.header, img.extra)
 
 
-def concat_images(images, check_affines=True, axis=None):
+# concat_images is one of those functions that might do too many things.
+# It will load images from filenames, and we cannot determine the specific
+# image in that case.
+# It can also check that affines are equal, which work if the affines are all
+# the same or all absent.
+# The following overloads attempt to ensure that the type of the images
+# (e.g., Nifti1Image) is preserved, and the presence of the affine is preserved,
+# when possible.
+
+
+# If check_affines is True and all images are of the same type (including
+# affine presence), type is preserved
+@ty.overload
+def concat_images(
+    images: Sequence[_OneSpatialImgT],
+    check_affines: bool = True,
+    axis: int | None = None,
+) -> _OneSpatialImgT: ...
+# If check_affines is False and all images are of the same type (permitting
+# mixed affines), the type is preserved and presence of affine is indeterminate
+@ty.overload
+def concat_images(
+    images: Sequence[AnySpatialImgT],
+    check_affines: L[False],
+    axis: int | None = None,
+) -> AnySpatialImgT: ...
+# If images are loaded from file, affines will be initialized, but type
+# can't be known. Sorry.
+@ty.overload
+def concat_images(
+    images: Sequence[FileSpec],
+    check_affines: bool = True,
+    axis: int | None = None,
+) -> SpatialImage[Affine]: ...
+# If filenames and images are passed in a mixed list, we can say the output
+# will be a SpatialImage.
+@ty.overload
+def concat_images(
+    images: Sequence[FileSpec | SpatialImage[ty.Any]],
+    check_affines: L[False],
+    axis: int | None = None,
+) -> SpatialImage[ty.Any]: ...
+
+
+# There is a missing option here, if the type system would permit it:
+# Images with affines and filenames could be concatenated and we would know
+# there would be an affine, regardless of whether it's checked.
+# I couldn't find a way to add it to the overloads at the bottom of the list,
+# and inserting it above reduced the specificity of the earlier overloads.
+# It seems like a pretty rare case, in any event.
+
+
+def concat_images(
+    images: Sequence[SpatialImage[ty.Any] | FileSpec],
+    check_affines: bool = True,
+    axis: int | None = None,
+) -> SpatialImage[ty.Any]:
     r"""Concatenate images in list to single image, along specified dimension
 
     Parameters
@@ -105,11 +179,13 @@ def concat_images(images, check_affines=True, axis=None):
        New image resulting from concatenating `images` across last
        dimension
     """
-    images = [load(img) if not hasattr(img, 'get_data') else img for img in images]
-    n_imgs = len(images)
+    loaded: list[SpatialImage[Affine | None]] = [
+        img if isinstance(img, SpatialImage) else load_as(img, SpatialImage) for img in images
+    ]
+    n_imgs = len(loaded)
     if n_imgs == 0:
         raise ValueError('Cannot concatenate an empty list of images.')
-    img0 = images[0]
+    img0 = loaded[0]
     affine = img0.affine
     header = img0.header
     klass = img0.__class__
@@ -121,13 +197,13 @@ def concat_images(images, check_affines=True, axis=None):
         out_data = np.empty(out_shape)
     else:
         # collect images in list for use with np.concatenate
-        out_data = [None] * n_imgs
+        out_data = [None] * n_imgs  # type: ignore[assignment]
     # Get part of shape we need to check inside loop
     idx_mask = np.ones((n_dim,), dtype=bool)
     if axis is not None:
         idx_mask[axis] = False
     masked_shape = np.array(shape0)[idx_mask]
-    for i, img in enumerate(images):
+    for i, img in enumerate(loaded):
         if len(img.shape) != n_dim:
             raise ValueError(f'Image {i} has {len(img.shape)} dimensions, image 0 has {n_dim}')
         if not np.all(np.array(img.shape)[idx_mask] == masked_shape):
@@ -148,7 +224,7 @@ def concat_images(images, check_affines=True, axis=None):
     return klass(out_data, affine, header)
 
 
-def four_to_three(img):
+def four_to_three(img: AnySpatialImgT) -> list[AnySpatialImgT]:
     """Create 3D images from 4D image by slicing over last axis
 
     Parameters
@@ -177,7 +253,7 @@ def four_to_three(img):
     return imgs
 
 
-def as_closest_canonical(img, enforce_diag=False):
+def as_closest_canonical(img: SpatialImgT, enforce_diag: bool = False) -> SpatialImgT:
     """Return `img` with data reordered to be closest to canonical
 
     Canonical order is the ordering of the output axes.
@@ -209,7 +285,7 @@ def as_closest_canonical(img, enforce_diag=False):
     return img
 
 
-def _aff_is_diag(aff):
+def _aff_is_diag(aff: npt.NDArray[np.floating]) -> bool:
     """Utility function returning True if affine is nearly diagonal"""
     rzs_aff = aff[:3, :3]
     return np.allclose(rzs_aff, np.diag(np.diag(rzs_aff)))
