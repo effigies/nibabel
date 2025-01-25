@@ -1981,6 +1981,7 @@ class Nifti1Pair(analyze.AnalyzeImage[AffT]):
     """Class for NIfTI1 format image, header pair"""
 
     header_class: type[Nifti1Header] = Nifti1PairHeader
+    header: Nifti1Header
     _header: Nifti1Header
     _meta_sniff_len = header_class.sizeof_hdr
     rw = True
