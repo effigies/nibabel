@@ -333,3 +333,79 @@ Subsampling CIFTI-2
     wbspec = CaretSpec("fsLR.wb.spec")
     dlpfc_img.coordaxis.load_structures(wbspec)
     ...
+
+
+**************
+Open questions
+**************
+
+1) Can/should image and geometry objects be promiscuous? If I load a GIFTI geometry,
+   should ``geometry.load_vertex_data()`` accept a FreeSurfer curvature file, or
+   should there be a bit more ecosystem-local logic?
+
+
+********************************
+Concatenable structures proposal
+********************************
+
+A brain is typically described with multiple structures,
+such as left and right hemispheres and a volumetric subcortical region.
+We will consider two reference cases:
+
+1) FreeSurfer, in which a subject directory can be used to retrieve
+   multiple surfaces or volumetric regions. Data arrays are specific to a
+   single structure.
+2) CIFTI-2, which permits an axis to have type ``CIFTI_INDEX_TYPE_BRAIN_MODELS``,
+   indicating that each index along an axis corresponds to a vertex or voxel in
+   an associated surface or volume.
+   The data array thus may span multiple structures.
+
+In the former case, the structures may be considered an unordered collection;
+in the latter, the sequence of structures directly corresponds to segments of
+the data array.
+
+.. code-block:: python
+
+    class GeometryCollection:
+        def get_geometry(self, name):
+            """ Return a geometry by name """
+
+        @property
+        def names(self):
+            """ A set of structure names """
+
+        @classmethod
+        def from_spec(klass, pathlike):
+        """ Load a collection of geometries from a specification, broadly construed. """
+
+
+    class PointsetSequence(GeometryCollection, Pointset):
+        # Inherit and override get_coords, n_coords from Pointset
+        def get_indices(self, name):
+            """ Return indices for data array corresponding to a named geometry """
+
+
+Additionally, CIFTI-2 permits subsets of surfaces to be sampled by explicitly listing
+the coordinate indices.
+Therefore we need the ability to load pre-masked data, which for meshes means a list of
+vertices, potentially in a different order to the reference coordinates.
+
+.. code-block:: python
+
+    def select_parcel():
+        img = nb.load("sub-01_task-rest_bold.dtseries.nii")  # Assume CIFTI SurfaceImage
+        parcel = nb.load("sub-fsLR_hemi-L_label-DLPFC_mask.label.gii")
+        structure = parcel.get_structure()  # Does not exist
+        vtx_idcs = np.where(parcel.agg_data())[0]
+        header, slicer = img.header.slice(structure=structure, indices=vtx_idcs)
+        # new header will return a corresponding geometry
+        patch_img = img.__class__(img.dataobj[slicer], header=header)
+        patch_img.load_geometry("fsLR.wb.spec")
+
+
+Considerations
+
+  * Should ``SurfaceHeader`` hold onto geometries loaded by the current image?
+    This would allow them to validate newly-loaded geometries. Alternately, the
+    ``SurfaceHeader`` provides access to an in-built geometry and a potential
+    validation method, but the ``SurfaceImage`` holds onto actual geometries

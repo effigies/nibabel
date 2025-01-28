@@ -39,6 +39,60 @@ class Pointset:
         return self.get_coords().shape[0]
 
 
+class Parcel:
+    def __init__(self, name, structure, indices):
+        """
+        Note that although parcel
+
+        name : string
+        structure : TriangularMesh or NdGrid
+        indices : object that can index the structure
+                  Ellipsis for a full structure
+                  (n,) array-like for TriangularMesh
+                  (n, N) array-like for NdGrid
+        """
+        self.name = name
+        self.structure = structure
+        self.indices = indices
+
+
+class CoordAxis:
+    def __init__(self, parcels):
+        self.parcels = list(parcels)
+
+
+class Substructure(Pointset):
+    """ A substructure is a portion of a larger structure, consisting
+    of a reference to the structure and a sequence of indices.
+
+    Substructures may be partial or whole; may maintain or modify the
+    relative order of points; and may be connected or disconnected
+    subsets.
+
+    Examples include surface patches, surface decimations, and volume
+    masks.
+    """
+    def __init__(self, structure, subset=None, metadata=None):
+        """
+
+        Parameters
+        ----------
+        structure : Pointset
+            A structure that 
+        subset : :obj:`slice`, array-like or None
+        """
+        self.structure = structure
+        if subset is None:
+            subset = Ellipsis
+        self.subset = subset
+        if metadata is None:
+            metadata = {}
+        self.metadata = metadata
+
+    def get_coords(self, name=None):
+        return self.structure.get_coords(name)[self.subset]
+
+
 class TriangularMesh(Pointset):
     """ A triangular mesh is a description of a surface tesselated into triangles """
 
@@ -93,6 +147,92 @@ class TriangularMesh(Pointset):
         raise NotImplementedError
 
 
+class NdGrid(Pointset):
+    """
+
+    """
+
+    def __init__(self, affines, shape):
+        try:
+            self._affines = dict(affines)
+        except TypeError:
+            self._affines = {"affine": np.array(affines)}
+        self._default = next(iter(self._affines))
+
+        self._shape = shape
+
+    def get_coords(self, name=None):
+        if name is None:
+            name = self._default
+        return apply_affine(self._affines[name], self._indices)
+
+    @property
+    def n_coords(self):
+        return np.prod(self._shape)
+
+
+class MaskedVolume(Substructure):
+    """
+
+    .. testsetup:
+
+        >>> from nibabel.tests.nibabel_data import needs_nibabel_data
+        >>> needs_nibabel_data('nitest-cifti2')()
+
+    >>> import nibabel as nb
+    >>> from nibabel.tests.nibabel_data import get_nibabel_data
+    >>> from pathlib import Path
+    >>> dscalar = nb.load(Path(get_nibabel_data()) / 'nitest-cifti2' / "ones.dscalar.nii")
+    >>> brainmodel_axis = dscalar.header.get_axis(1)
+    >>> grid = NdGrid(brainmodel_axis.affine, brainmodel_axis.shape)
+    >>> volgeom = MaskedVolume(grid, brainmodel_axis.voxel[brainmodel_axis.volume_mask])
+    """
+
+    def __init__(self, structure, subset=None, metadata=None):
+        super().__init__(structure, subset, metadata)
+
+        try:
+            self._affines = dict(affines)
+        except TypeError:
+            self._affines = {"affine": np.array(affines)}
+        self._default = next(iter(self._affines))
+
+        self._indices = np.array(indices)
+        if self._indices.ndim != 2 or self._indices.shape[1] != 3:
+            raise ValueError("Indices must be an Nx3 matrix")
+
+        if shape is None:
+            shape = self._indices.max(axis=0)
+        self._shape = shape
+
+    def get_coords(self, name=None):
+        if name is None:
+            name = self._default
+        return apply_affine(self._affines[name], self._indices)
+
+    @property
+    def n_coords(self):
+        return self._indices.shape[0]
+
+    def get_indices(self):
+        return self._indices
+
+    def to_mask(self, name=None, shape=None):
+        if name is None:
+            name = self._default
+        if shape is None:
+            shape = self._shape
+        dataobj = np.zeros(shape, dtype=np.bool_)
+        dataobj[self._indices] = True
+        return SpatialImage(dataobj, self._affines[name])
+
+    @classmethod
+    def from_mask(klass, img):
+        affine = img.affine
+        indices = np.vstack(np.where(img.dataobj)).T
+        return klass(affine, indices=indices)
+
+
 class SurfaceHeader(FileBasedHeader):
     """ Template class to implement SurfaceHeader protocol """
     def get_geometry(self):
@@ -101,6 +241,9 @@ class SurfaceHeader(FileBasedHeader):
         If no default geometry can be provided, returns ``None``.
         """
         return None
+
+    def validate_geometry(self, geometry):
+        pass
 
 
 class SurfaceImage(DataobjImage):
@@ -114,6 +257,15 @@ class SurfaceImage(DataobjImage):
         super().__init__(dataobj, header=header, extra=extra, file_map=file_map)
         if geometry is None:
             geometry = self.header.get_geometry()
+        self._geometry = geometry
+
+    @property
+    def geometry(self):
+        return self._geometry
+
+    @geometry.setter
+    def geometry(self, geometry):
+        self._header.validate_geometry(geometry)
         self._geometry = geometry
 
     def load_geometry(self, pathlike):

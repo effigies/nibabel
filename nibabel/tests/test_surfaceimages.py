@@ -218,3 +218,22 @@ class FreeSurferSubject(GeometryCollection):
         subject = super().__init__(structures)
         subject._subject_dir = subject_dir
         return subject
+
+
+class DeferredSurface(TriangularMesh):
+    def __init__(self, meshes=None, location=None):
+        self.location = location
+        super().__init__(meshes)
+
+
+class CaretSpec(GeometryCollection):
+    @classmethod
+    def from_spec(klass, pathlike):
+        # Load CaretSpecFile document
+        # Structures are DataFiles, keyed by "Structure" element
+
+
+class CiftiBrainModelAxis(PointsetSequence):
+    @classmethod
+    def from_spec(klass, pathlike):
+        ...

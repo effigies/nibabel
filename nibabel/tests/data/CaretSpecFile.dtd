@@ -1,0 +1,83 @@
+<!--
+Initially provided by John Harwell on the HCP user list [0].
+
+Modified by Chris Markiewicz based on example wb.spec files.
+
+[0] https://groups.google.com/a/humanconnectome.org/g/hcp-users/c/EGuwdaTVFuw/m/Pir-LpbHAQAJ
+-->
+<!ELEMENT CaretSpecFile (MetaData?, DataFile+)>
+<!ATTLIST CaretSpecFile
+    Version ( 1.0 ) #REQUIRED
+>
+<!ELEMENT MetaData (MD*)>
+<!ELEMENT MD (Name, Value)>
+<!ELEMENT Name (#PCDATA)>
+<!ELEMENT Value (#PCDATA)>
+<!ELEMENT DataFile (#PCDATA)>
+<!ATTLIST DataFile
+    Structure ( CortexLeft
+              | CortexRight
+              | Cerebellum
+              | AccumbensLeft
+              | AccumbensRight
+              | AllGreyMatter
+              | AllWhiteMatter
+              | AmygdalaLeft
+              | AmygdalaRight
+              | BrainStem
+              | CaudateLeft
+              | CaudateRight
+              | CerebellarWhiteMatterLeft
+              | CerebellarWhiteMatterRight
+              | CerebellumLeft
+              | CerebellumRight
+              | CerebralWhiteMatterLeft
+              | CerebralWhiteMatterRight
+              | Cortex
+              | DiencephalonVentralLeft
+              | DiencephalonVentralRight
+              | HippocampusLeft
+              | HippocampusRight
+              | Invalid
+              | Other
+              | OtherGreyMatter
+              | OtherWhiteMatter
+              | PallidumLeft
+              | PallidumRight
+              | PutamenLeft
+              | PutamenRight
+              | ThalamusLeft
+              | ThalamusRight ) #REQUIRED
+      DataFileType ( ANNOTATION
+                   | ANNOTATION_TEXT_SUBSTITUTION
+                   | BORDER
+                   | CONNECTIVITY_DENSE
+                   | CONNECTIVITY_DENSE_DYNAMIC
+                   | CONNECTIVITY_DENSE_LABEL
+                   | CONNECTIVITY_DENSE_PARCEL
+                   | CONNECTIVITY_DENSE_SCALAR
+                   | CONNECTIVITY_DENSE_TIME_SERIES
+                   | CONNECTIVITY_FIBER_ORIENTATIONS_TEMPORARY
+                   | CONNECTIVITY_FIBER_TRAJECTORY_TEMPORARY
+                   | CONNECTIVITY_PARCEL
+                   | CONNECTIVITY_PARCEL_DENSE
+                   | CONNECTIVITY_PARCEL_LABEL
+                   | CONNECTIVITY_PARCEL_SCALAR
+                   | CONNECTIVITY_PARCEL_SERIES
+                   | CONNECTIVITY_SCALAR_DATA_SERIES
+                   | CZI_IMAGE_FILE
+                   | FOCI
+                   | IMAGE
+                   | LABEL
+                   | METRIC
+                   | METRIC_DYNAMIC
+                   | PALETTE
+                   | RGBA
+                   | SCENE
+                   | SPECIFICATION
+                   | SURFACE
+                   | UNKNOWN
+                   | VOLUME
+                   | VOLUME_DYNAMIC ) #REQUIRED
+     Selected ( true | false ) #REQUIRED
+>
