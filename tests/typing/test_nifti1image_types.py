@@ -5,9 +5,7 @@ import pytest
 
 from nibabel.nifti1 import Nifti1Image
 
-if ty.TYPE_CHECKING:
-    from typing import reveal_type
-else:
+if not ty.TYPE_CHECKING:
 
     def reveal_type(x: ty.Any) -> None:
         pass
