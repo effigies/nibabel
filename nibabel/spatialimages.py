@@ -155,10 +155,9 @@ if ty.TYPE_CHECKING:
     from .arrayproxy import ArrayLike
     from .fileholders import FileMap
 
-    # Track whether the image is initialized with an affine or not
-    # This will almost always be the case, but there are some exceptions
-    # and some functions that will fail if the affine is not present
-
+# Track whether the image is initialized with an affine or not
+# This will almost always be the case, but there are some exceptions
+# and some functions that will fail if the affine is not present
 Affine = npt.NDArray[np.floating]
 AffT = TypeVar('AffT', covariant=True, bound=ty.Union[Affine, None], default=Affine)
 SpatialImgT = TypeVar('SpatialImgT', bound='SpatialImage[Affine]')
@@ -201,7 +200,7 @@ class SpatialHeader(FileBasedHeader, SpatialProtocol):
         data_dtype: npt.DTypeLike = np.float32,
         shape: Sequence[int] = (0,),
         zooms: Sequence[float] | None = None,
-    ):
+    ) -> None:
         self.set_data_dtype(data_dtype)
         self._zooms = ()
         self.set_data_shape(shape)
@@ -484,7 +483,7 @@ class SpatialImage(DataobjImage, ty.Generic[AffT]):
         header: FileBasedHeader | ty.Mapping | None = None,
         extra: ty.Mapping | None = None,
         file_map: FileMap | None = None,
-    ):
+    ) -> None:
         """Initialize image
 
         The image is a combination of (array-like, affine matrix, header), with
@@ -593,9 +592,7 @@ metadata:
         self._header.set_data_dtype(dtype)
 
     @classmethod
-    def from_image(
-        klass: type[AnySpatialImgT], img: SpatialImage | FileBasedImage
-    ) -> AnySpatialImgT:
+    def from_image(klass: type[AnySpatialImgT], img: FileBasedImage) -> AnySpatialImgT:
         """Class method to create new instance of own class from `img`
 
         Parameters
@@ -638,7 +635,7 @@ metadata:
         """
         return self.ImageSlicer(self)
 
-    def __getitem__(self, idx: object) -> None:
+    def __getitem__(self, idx: object) -> ty.Never:
         """No slicing or dictionary interface for images
 
         Use the slicer attribute to perform cropping and subsampling at your

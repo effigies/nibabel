@@ -778,7 +778,7 @@ class EcatImage(SpatialImage[AffT]):
         mlist: npt.NDArray[np.integer],
         extra: Mapping | None = None,
         file_map: FileMap | None = None,
-    ):
+    ) -> None:
         """Initialize Image
 
         The image is a combination of
@@ -842,7 +842,11 @@ class EcatImage(SpatialImage[AffT]):
         """returns 4X4 affine"""
         return self._subheader.get_frame_affine(frame=frame)
 
-    def get_frame(self, frame: int, orientation: L['neurological', 'radiological'] | None = None):
+    def get_frame(
+        self,
+        frame: int,
+        orientation: L['neurological', 'radiological'] | None = None,
+    ) -> np.ndarray:
         """
         Get full volume for a time frame
 

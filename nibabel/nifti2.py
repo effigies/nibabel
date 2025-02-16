@@ -243,14 +243,16 @@ class Nifti2PairHeader(Nifti2Header):
 class Nifti2Pair(Nifti1Pair[AffT]):
     """Class for NIfTI2 format image, header pair"""
 
-    header_class = Nifti2PairHeader
+    header_class: type[Nifti2Header] = Nifti2PairHeader
+    header: Nifti2Header
     _meta_sniff_len = header_class.sizeof_hdr
 
 
 class Nifti2Image(Nifti1Image[AffT]):
     """Class for single file NIfTI2 format image"""
 
-    header_class = Nifti2Header
+    header_class: type[Nifti2Header] = Nifti2Header
+    header: Nifti2Header
     _meta_sniff_len = header_class.sizeof_hdr
 
 

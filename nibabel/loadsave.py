@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import os
+import typing as ty
 
 import numpy as np
 
@@ -25,8 +26,7 @@ from .openers import ImageOpener
 _compressed_suffixes = ('.gz', '.bz2', '.zst')
 
 
-TYPE_CHECKING = False
-if TYPE_CHECKING:
+if ty.TYPE_CHECKING:
     from typing import ParamSpec, TypedDict, TypeVar
 
     from .filebasedimages import FileBasedImage
