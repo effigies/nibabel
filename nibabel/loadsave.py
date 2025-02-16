@@ -28,7 +28,7 @@ _compressed_suffixes = ('.gz', '.bz2', '.zst')
 
 if ty.TYPE_CHECKING:
     from ._typing import ParamSpec
-    from .filebasedimages import FileBasedImage
+    from .filebasedimages import FileBasedImage, ImgT
     from .filename_parser import FileSpec
 
     P = ParamSpec('P')
@@ -117,6 +117,15 @@ def load(filename: FileSpec, **kwargs) -> FileBasedImage:
         raise ImageFileError(msg)
 
     raise ImageFileError(f'Cannot work out file type of "{filename}"')
+
+
+def load_as(filename: FileSpec, api: type[ImgT], **kwargs) -> ImgT:
+    img = load(filename, **kwargs)
+    if not isinstance(img, api):
+        raise ImageFileError(
+            f'File {filename} is not of type {api.__name__}, but {type(img).__name__}'
+        )
+    return img
 
 
 @deprecate_with_version('guessed_image_type deprecated.', '3.2', '5.0')
