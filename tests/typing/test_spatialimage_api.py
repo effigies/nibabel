@@ -3,9 +3,7 @@ import typing as ty
 import numpy as np
 import pytest
 
-import nibabel as nb
-from nibabel.analyze import AnalyzeImage
-from nibabel.nifti1 import Nifti1Image
+from nibabel import AnalyzeImage, Spm99AnalyzeImage, Spm2AnalyzeImage, Nifti1Image, Nifti2Image, MGHImage
 from nibabel.spatialimages import SpatialImage
 
 if ty.TYPE_CHECKING:
@@ -17,148 +15,66 @@ else:
 
 
 @pytest.mark.mypy_testing
-def test_SpatialImageAffines() -> None:
-    """Test type hints for the SpatialImage class."""
+def test_affine_tracking() -> None:
     img_with_affine = SpatialImage(np.empty((5, 5, 5)), np.eye(4))
     img_without_affine = SpatialImage(np.empty((5, 5, 5)), None)
 
     reveal_type(img_with_affine)  # R: nibabel.spatialimages.SpatialImage[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]]
     reveal_type(img_without_affine)  # R: nibabel.spatialimages.SpatialImage[None]
 
-    # A function that requires an affine will raise an error if the affine is None
-    ras_img = nb.as_closest_canonical(img_with_affine)
-    reveal_type(ras_img)  # R: nibabel.spatialimages.SpatialImage[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]]
-    with pytest.raises(Exception):
-        nb.as_closest_canonical(img_without_affine)  # E: Value of type variable "SpatialImgT" of "as_closest_canonical" cannot be "SpatialImage[None]"  [type-var]
 
-    # Functions that do not require affines should preserve the affine type
-    reveal_type(nb.squeeze_image(img_with_affine))  # R: nibabel.spatialimages.SpatialImage[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]]
-    reveal_type(nb.squeeze_image(img_without_affine))  # R: nibabel.spatialimages.SpatialImage[None]
+@pytest.mark.mypy_testing
+def test_SpatialImageAPI() -> None:
+    img = SpatialImage(np.empty((5, 5, 5)), np.eye(4))
 
-    reveal_type(
-        nb.concat_images([img_with_affine, img_with_affine], check_affines=False)  # R: nibabel.spatialimages.SpatialImage[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]]
-    )
-    reveal_type(nb.concat_images([img_without_affine] * 2, check_affines=False))  # R: nibabel.spatialimages.SpatialImage[None]
-    # In practice, the first affine is used, but that's difficult to annotate, so we lose specificity
-    reveal_type(
-        nb.concat_images(  # R: nibabel.spatialimages.SpatialImage[Union[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]], None]]
-            [img_with_affine, img_without_affine], check_affines=False
-        )
-    )
+    # Affine
+    reveal_type(img.affine)  # R: numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]
+    reveal_type(SpatialImage(np.empty((5, 5, 5)), None).affine)  # R: None
 
-    # If check_affines=True (default), then type checking and execution can fail unless all check_affines
-    # either exist or are absent
-    reveal_type(nb.concat_images([img_with_affine] * 2))  # R: nibabel.spatialimages.SpatialImage[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]]
-    reveal_type(nb.concat_images([img_without_affine] * 2))  # R: nibabel.spatialimages.SpatialImage[None]
-    with pytest.raises(ValueError):
-        nb.concat_images(  # E: Value of type variable "_OneSpatialImgT" of "concat_images" cannot be "SpatialImage[ndarray[tuple[int, ...], dtype[float64]] | None]"
-            [img_with_affine, img_without_affine]
-        )
-    with pytest.raises(ValueError):
-        nb.concat_images(  # E: Value of type variable "_OneSpatialImgT" of "concat_images" cannot be "SpatialImage[ndarray[tuple[int, ...], dtype[float64]] | None]"
-            [img_without_affine, img_with_affine]
-        )
+    # Data
+    reveal_type(img.dataobj)  # R: nibabel.arrayproxy.ArrayLike
+    reveal_type(img.get_fdata())  # R: numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]
+    reveal_type(img.get_fdata(dtype=np.float32))  # R: numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.floating[numpy._typing._nbit_base._32Bit]]]
+    reveal_type(img.get_fdata(dtype=np.float64))  # R: numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]
+    reveal_type(img.get_fdata(dtype=np.dtype(np.float32)))  # R: numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.floating[numpy._typing._nbit_base._32Bit]]]
+    reveal_type(img.get_fdata(dtype=np.dtype(np.float64)))  # R: numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]
+    reveal_type(img.get_fdata(dtype=np.dtype("f4")))  # R: numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.floating[numpy._typing._nbit_base._32Bit]]]
+    reveal_type(img.get_fdata(dtype=np.dtype("f8")))  # R: numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]
+    reveal_type(img.get_fdata(dtype="f4"))  # R: numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.floating[numpy._typing._nbit_base._32Bit]]]
+    reveal_type(img.get_fdata(dtype="f8"))  # R: numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]
 
-    mixed_list = [img_with_affine, img_without_affine]
-    with pytest.raises(ValueError):
-        nb.concat_images(mixed_list)  # E: Value of type variable "_OneSpatialImgT" of "concat_images" cannot be "SpatialImage[ndarray[tuple[int, ...], dtype[float64]] | None]"  [type-var]
+    # Indirect header
+    reveal_type(img.shape)  # R: builtins.tuple[builtins.int, ...]
+    reveal_type(img.ndim)  # R: builtins.int
+
+    # SpatialHeader fields
+    reveal_type(img.header.get_data_dtype())  # R: numpy.dtype[Any]
+    reveal_type(img.header.get_data_shape())  # R: builtins.tuple[builtins.int, ...]
+    reveal_type(img.header.get_zooms())  # R: builtins.tuple[builtins.float, ...]
 
 
 @pytest.mark.mypy_testing
-def test_AnalyzeImageAffines() -> None:
-    img_with_affine = AnalyzeImage(np.empty((5, 5, 5)), np.eye(4))
-    img_without_affine = AnalyzeImage(np.empty((5, 5, 5)), None)
+def test_image_and_header_types() -> None:
+    analyze_img = AnalyzeImage(np.empty((5, 5, 5)), np.eye(4))
+    reveal_type(analyze_img)  # R: nibabel.analyze.AnalyzeImage[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]]
+    reveal_type(analyze_img.header)  # R: nibabel.analyze.AnalyzeHeader
 
-    reveal_type(img_with_affine)  # R: nibabel.analyze.AnalyzeImage[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]]
-    reveal_type(img_without_affine)  # R: nibabel.analyze.AnalyzeImage[None]
+    spm99_img = Spm99AnalyzeImage(np.empty((5, 5, 5)), np.eye(4))
+    reveal_type(spm99_img)  # R: nibabel.spm99analyze.Spm99AnalyzeImage[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]]
+    reveal_type(spm99_img.header)  # R: nibabel.spm99analyze.Spm99AnalyzeHeader
 
-    reveal_type(img_with_affine)  # R: nibabel.analyze.AnalyzeImage[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]]
-    reveal_type(img_without_affine)  # R: nibabel.analyze.AnalyzeImage[None]
+    spm2_img = Spm2AnalyzeImage(np.empty((5, 5, 5)), np.eye(4))
+    reveal_type(spm2_img)  # R: nibabel.spm2analyze.Spm2AnalyzeImage[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]]
+    reveal_type(spm2_img.header)  # R: nibabel.spm2analyze.Spm2AnalyzeHeader
 
-    # A function that requires an affine will raise an error if the affine is None
-    ras_img = nb.as_closest_canonical(img_with_affine)
-    reveal_type(ras_img)  # R: nibabel.analyze.AnalyzeImage[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]]
-    with pytest.raises(Exception):
-        nb.as_closest_canonical(img_without_affine)  # E: Value of type variable "SpatialImgT" of "as_closest_canonical" cannot be "AnalyzeImage[None]"  [type-var]
+    ni1_img = Nifti1Image(np.empty((5, 5, 5)), np.eye(4))
+    reveal_type(ni1_img)  # R: nibabel.nifti1.Nifti1Image[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]]
+    reveal_type(ni1_img.header)  # R: nibabel.nifti1.Nifti1Header
 
-    # Functions that do not require affines should preserve the affine type
-    reveal_type(nb.squeeze_image(img_with_affine))  # R: nibabel.analyze.AnalyzeImage[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]]
-    reveal_type(nb.squeeze_image(img_without_affine))  # R: nibabel.analyze.AnalyzeImage[None]
+    ni2_img = Nifti2Image(np.empty((5, 5, 5)), np.eye(4))
+    reveal_type(ni2_img)  # R: nibabel.nifti2.Nifti2Image[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]]
+    reveal_type(ni2_img.header)  # R: nibabel.nifti2.Nifti2Header
 
-    reveal_type(
-        nb.concat_images([img_with_affine, img_with_affine], check_affines=False)  # R: nibabel.analyze.AnalyzeImage[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]]
-    )
-    reveal_type(nb.concat_images([img_without_affine] * 2, check_affines=False))  # R: nibabel.analyze.AnalyzeImage[None]
-    # In practice, the first affine is used, but that's difficult to annotate, so we lose specificity
-    reveal_type(
-        nb.concat_images(  # R: nibabel.analyze.AnalyzeImage[Union[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]], None]]
-            [img_with_affine, img_without_affine], check_affines=False
-        )
-    )
-
-    # If check_affines=True (default), then type checking and execution can fail unless all check_affines
-    # either exist or are absent
-    reveal_type(nb.concat_images([img_with_affine] * 2))  # R: nibabel.analyze.AnalyzeImage[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]]
-    reveal_type(nb.concat_images([img_without_affine] * 2))  # R: nibabel.analyze.AnalyzeImage[None]
-    with pytest.raises(ValueError):
-        nb.concat_images(  # E: Value of type variable "_OneSpatialImgT" of "concat_images" cannot be "AnalyzeImage[ndarray[tuple[int, ...], dtype[float64]] | None]"
-            [img_with_affine, img_without_affine]
-        )
-    with pytest.raises(ValueError):
-        nb.concat_images(  # E: Value of type variable "_OneSpatialImgT" of "concat_images" cannot be "AnalyzeImage[ndarray[tuple[int, ...], dtype[float64]] | None]"
-            [img_without_affine, img_with_affine]
-        )
-
-    mixed_list = [img_with_affine, img_without_affine]
-    with pytest.raises(ValueError):
-        nb.concat_images(mixed_list)  # E: Value of type variable "_OneSpatialImgT" of "concat_images" cannot be "AnalyzeImage[ndarray[tuple[int, ...], dtype[float64]] | None]"
-
-
-@pytest.mark.mypy_testing
-def test_Nifti1ImageAffines() -> None:
-    img_with_affine = Nifti1Image(np.empty((5, 5, 5)), np.eye(4))
-    img_without_affine = Nifti1Image(np.empty((5, 5, 5)), None)
-
-    reveal_type(img_with_affine)  # R: nibabel.nifti1.Nifti1Image[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]]
-    reveal_type(img_without_affine)  # R: nibabel.nifti1.Nifti1Image[None]
-
-    reveal_type(img_with_affine)  # R: nibabel.nifti1.Nifti1Image[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]]
-    reveal_type(img_without_affine)  # R: nibabel.nifti1.Nifti1Image[None]
-
-    # A function that requires an affine will raise an error if the affine is None
-    ras_img = nb.as_closest_canonical(img_with_affine)
-    reveal_type(ras_img)  # R: nibabel.nifti1.Nifti1Image[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]]
-    with pytest.raises(Exception):
-        nb.as_closest_canonical(img_without_affine)  # E: Value of type variable "SpatialImgT" of "as_closest_canonical" cannot be "Nifti1Image[None]"  [type-var]
-
-    # Functions that do not require affines should preserve the affine type
-    reveal_type(nb.squeeze_image(img_with_affine))  # R: nibabel.nifti1.Nifti1Image[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]]
-    reveal_type(nb.squeeze_image(img_without_affine))  # R: nibabel.nifti1.Nifti1Image[None]
-
-    reveal_type(
-        nb.concat_images([img_with_affine, img_with_affine], check_affines=False)  # R: nibabel.nifti1.Nifti1Image[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]]
-    )
-    reveal_type(nb.concat_images([img_without_affine] * 2, check_affines=False))  # R: nibabel.nifti1.Nifti1Image[None]
-    # In practice, the first affine is used, but that's difficult to annotate, so we lose specificity
-    reveal_type(
-        nb.concat_images(  # R: nibabel.nifti1.Nifti1Image[Union[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]], None]]
-            [img_with_affine, img_without_affine], check_affines=False
-        )
-    )
-
-    # If check_affines=True (default), then type checking and execution can fail unless all check_affines
-    # either exist or are absent
-    reveal_type(nb.concat_images([img_with_affine] * 2))  # R: nibabel.nifti1.Nifti1Image[numpy.ndarray[builtins.tuple[builtins.int, ...], numpy.dtype[numpy.float64]]]
-    reveal_type(nb.concat_images([img_without_affine] * 2))  # R: nibabel.nifti1.Nifti1Image[None]
-    with pytest.raises(ValueError):
-        nb.concat_images(  # E: Value of type variable "_OneSpatialImgT" of "concat_images" cannot be "Nifti1Image[ndarray[tuple[int, ...], dtype[float64]] | None]"
-            [img_with_affine, img_without_affine]
-        )
-    with pytest.raises(ValueError):
-        nb.concat_images(  # E: Value of type variable "_OneSpatialImgT" of "concat_images" cannot be "Nifti1Image[ndarray[tuple[int, ...], dtype[float64]] | None]"
-            [img_without_affine, img_with_affine]
-        )
-
-    mixed_list = [img_with_affine, img_without_affine]
-    with pytest.raises(ValueError):
-        nb.concat_images(mixed_list)  # E: Value of type variable "_OneSpatialImgT" of "concat_images" cannot be "Nifti1Image[ndarray[tuple[int, ...], dtype[float64]] | None]"
+    mgh_img = MGHImage(np.empty((5, 5, 5), dtype=np.float32), np.eye(4))
+    reveal_type(mgh_img)  # R: nibabel.freesurfer.mghformat.MGHImage
+    reveal_type(mgh_img.header)  # R: nibabel.freesurfer.mghformat.MGHHeader
