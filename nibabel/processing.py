@@ -17,8 +17,13 @@ Image processing functions for:
 Smoothing and resampling routines need scipy.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, overload
+
 import numpy as np
 import numpy.linalg as npl
+import numpy.typing as npt
 
 from .optpkg import optional_package
 
@@ -30,10 +35,15 @@ from .nifti1 import Nifti1Image
 from .orientations import axcodes2ornt, io_orientation, ornt_transform
 from .spaces import vox2out_vox
 
+if TYPE_CHECKING:
+    from .spatialimages import Affine, SpatialImage, SpatialImgT
+
+    VoxMap = SpatialImage[Affine] | tuple[tuple[int, int, int], Affine]
+
 SIGMA2FWHM = np.sqrt(8 * np.log(2))
 
 
-def fwhm2sigma(fwhm):
+def fwhm2sigma(fwhm: npt.ArrayLike) -> npt.NDArray[np.floating]:
     """Convert a FWHM value to sigma in a Gaussian kernel.
 
     Parameters
@@ -56,7 +66,7 @@ def fwhm2sigma(fwhm):
     return np.asarray(fwhm) / SIGMA2FWHM
 
 
-def sigma2fwhm(sigma):
+def sigma2fwhm(sigma: npt.ArrayLike) -> npt.NDArray[np.floating]:
     """Convert a sigma in a Gaussian kernel to a FWHM value
 
     Parameters
@@ -79,7 +89,7 @@ def sigma2fwhm(sigma):
     return np.asarray(sigma) * SIGMA2FWHM
 
 
-def adapt_affine(affine, n_dim):
+def adapt_affine(affine: npt.ArrayLike, n_dim: int) -> npt.NDArray[np.floating]:
     """Adapt input / output dimensions of spatial `affine` for `n_dims`
 
     Adapts a spatial (4, 4) affine that is being applied to an image with fewer
@@ -115,14 +125,56 @@ def adapt_affine(affine, n_dim):
     return adapted
 
 
+# Determine return type from out_class
+# Can't use Nifti1Image as a default for type[SpatialImgT], so this is very verbose.
+@overload
 def resample_from_to(
-    from_img,
-    to_vox_map,
-    order=3,
-    mode='constant',
-    cval=0.0,
-    out_class=Nifti1Image,
-):
+    from_img: SpatialImage[Affine],
+    to_vox_map: VoxMap,
+    order: int = 3,
+    mode: str = 'constant',
+    cval: float = 0.0,
+    out_class: type[Nifti1Image] = Nifti1Image,
+) -> Nifti1Image[Affine]: ...
+@overload
+def resample_from_to(
+    from_img: SpatialImage[Affine],
+    to_vox_map: VoxMap,
+    order: int = 3,
+    mode: str = 'constant',
+    cval: float = 0.0,
+    *,
+    out_class: type[SpatialImgT],
+) -> SpatialImgT: ...
+@overload
+def resample_from_to(
+    from_img: SpatialImage[Affine],
+    to_vox_map: VoxMap,
+    order: int,
+    mode: str,
+    cval: float,
+    out_class: type[SpatialImgT],
+) -> SpatialImgT: ...
+# Determine return type from from_img type
+@overload
+def resample_from_to(
+    from_img: SpatialImgT,
+    to_vox_map: VoxMap,
+    order: int = 3,
+    mode: str = 'constant',
+    cval: float = 0.0,
+    out_class: None = None,
+) -> SpatialImgT: ...
+
+
+def resample_from_to(
+    from_img: SpatialImage[Affine],
+    to_vox_map: VoxMap,
+    order: int = 3,
+    mode: str = 'constant',
+    cval: float = 0.0,
+    out_class: type[SpatialImage] | None = Nifti1Image,
+) -> SpatialImage[Affine]:
     """Resample image `from_img` to mapped voxel space `to_vox_map`
 
     Resample using N-d spline interpolation.
@@ -164,10 +216,11 @@ def resample_from_to(
         raise ValueError(
             f'Cannot predict position of spatial axes for Image type {type(from_img)}'
         )
-    try:
-        to_shape, to_affine = to_vox_map.shape, to_vox_map.affine
-    except AttributeError:
+    if isinstance(to_vox_map, tuple):
         to_shape, to_affine = to_vox_map
+    else:
+        to_shape = to_vox_map.shape[:3]  # type: ignore[assignment]
+        to_affine = to_vox_map.affine
     a_to_affine = adapt_affine(to_affine, len(to_shape))
     if out_class is None:
         out_class = from_img.__class__
@@ -183,14 +236,56 @@ def resample_from_to(
     return out_class(data, to_affine, from_img.header)
 
 
+# Determine return type from out_class
+# Can't use Nifti1Image as a default for type[SpatialImgT], so this is very verbose.
+@overload
 def resample_to_output(
-    in_img,
-    voxel_sizes=None,
-    order=3,
-    mode='constant',
-    cval=0.0,
-    out_class=Nifti1Image,
-):
+    in_img: SpatialImage[Affine],
+    voxel_sizes: npt.ArrayLike | None = None,
+    order: int = 3,
+    mode: str = 'constant',
+    cval: float = 0.0,
+    out_class: type[Nifti1Image] = Nifti1Image,
+) -> Nifti1Image[Affine]: ...
+@overload
+def resample_to_output(
+    in_img: SpatialImage[Affine],
+    voxel_sizes: npt.ArrayLike | None,
+    order: int = 3,
+    mode: str = 'constant',
+    cval: float = 0.0,
+    *,
+    out_class: type[SpatialImgT],
+) -> SpatialImgT: ...
+@overload
+def resample_to_output(
+    in_img: SpatialImage[Affine],
+    voxel_sizes: npt.ArrayLike | None,
+    order: int,
+    mode: str,
+    cval: float,
+    out_class: type[SpatialImgT],
+) -> SpatialImgT: ...
+# Determine return type from in_img type
+@overload
+def resample_to_output(
+    in_img: SpatialImgT,
+    voxel_sizes: npt.ArrayLike | None = None,
+    order: int = 3,
+    mode: str = 'constant',
+    cval: float = 0.0,
+    out_class: None = None,
+) -> SpatialImgT: ...
+
+
+def resample_to_output(
+    in_img: SpatialImage[Affine],
+    voxel_sizes: npt.ArrayLike | None = None,
+    order: int = 3,
+    mode: str = 'constant',
+    cval: float = 0.0,
+    out_class: type[SpatialImage] | None = Nifti1Image,
+) -> SpatialImage[Affine]:
     """Resample image `in_img` to output voxel axes (world space)
 
     Parameters
@@ -247,13 +342,48 @@ def resample_to_output(
     return resample_from_to(in_img, out_vox_map, order, mode, cval, out_class)
 
 
+@overload
 def smooth_image(
-    img,
-    fwhm,
-    mode='nearest',
-    cval=0.0,
-    out_class=Nifti1Image,
-):
+    img: SpatialImage[Affine],
+    fwhm: npt.ArrayLike,
+    mode: str = 'nearest',
+    cval: float = 0.0,
+    out_class: type[Nifti1Image] = Nifti1Image,
+) -> Nifti1Image[Affine]: ...
+@overload
+def smooth_image(
+    img: SpatialImage[Affine],
+    fwhm: npt.ArrayLike,
+    mode: str = 'nearest',
+    cval: float = 0.0,
+    *,
+    out_class: type[SpatialImgT],
+) -> SpatialImgT: ...
+@overload
+def smooth_image(
+    img: SpatialImage[Affine],
+    fwhm: npt.ArrayLike,
+    mode: str,
+    cval: float,
+    out_class: type[SpatialImgT],
+) -> SpatialImgT: ...
+@overload
+def smooth_image(
+    img: SpatialImgT,
+    fwhm: npt.ArrayLike,
+    mode: str = 'nearest',
+    cval: float = 0.0,
+    out_class: None = None,
+) -> SpatialImgT: ...
+
+
+def smooth_image(
+    img: SpatialImage[Affine],
+    fwhm: npt.ArrayLike,
+    mode: str = 'nearest',
+    cval: float = 0.0,
+    out_class: type[SpatialImage] | None = Nifti1Image,
+) -> SpatialImage[Affine]:
     """Smooth image `img` along voxel axes by FWHM `fwhm` millimeters
 
     Parameters
@@ -315,16 +445,52 @@ def smooth_image(
     return out_class(sm_data, img.affine, img.header)
 
 
+@overload
 def conform(
-    from_img,
-    out_shape=(256, 256, 256),
-    voxel_size=(1.0, 1.0, 1.0),
-    order=3,
-    mode='constant',
-    cval=0.0,
-    orientation='RAS',
-    out_class=None,
-):
+    from_img: SpatialImage[Affine],
+    out_shape: tuple[int, int, int] = (256, 256, 256),
+    voxel_size: tuple[float, float, float] = (1.0, 1.0, 1.0),
+    order: int = 3,
+    mode: str = 'constant',
+    cval: float = 0.0,
+    orientation: str = 'RAS',
+    *,
+    out_class: type[SpatialImgT],
+) -> SpatialImgT: ...
+@overload
+def conform(
+    from_img: SpatialImage[Affine],
+    out_shape: tuple[int, int, int],
+    voxel_size: tuple[float, float, float],
+    order: int,
+    mode: str,
+    cval: float,
+    orientation: str,
+    out_class: type[SpatialImgT],
+) -> SpatialImgT: ...
+@overload
+def conform(
+    from_img: SpatialImgT,
+    out_shape: tuple[int, int, int] = (256, 256, 256),
+    voxel_size: tuple[float, float, float] = (1.0, 1.0, 1.0),
+    order: int = 3,
+    mode: str = 'constant',
+    cval: float = 0.0,
+    orientation: str = 'RAS',
+    out_class: None = None,
+) -> SpatialImgT: ...
+
+
+def conform(
+    from_img: SpatialImage[Affine],
+    out_shape: tuple[int, int, int] = (256, 256, 256),
+    voxel_size: tuple[float, float, float] = (1.0, 1.0, 1.0),
+    order: int = 3,
+    mode: str = 'constant',
+    cval: float = 0.0,
+    orientation: str = 'RAS',
+    out_class: type[SpatialImage] | None = None,
+) -> SpatialImage[Affine]:
     """Resample image to ``out_shape`` with voxels of size ``voxel_size``.
 
     Using the default arguments, this function is meant to replicate most parts
